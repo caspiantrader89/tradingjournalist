@@ -1118,7 +1118,88 @@ function guessMapping(header) {
   return '';
 }
 
+// Colonne fisse del blocco "Posizioni" nel Report Cronistorico dei Trade
+// esportato da MetaTrader/FTMO (.xlsx). L'ordine è sempre lo stesso:
+// Ora apertura | Posizione(id) | Simbolo | Tipo | Volume | Prezzo apertura |
+// S/L | T/P | Ora chiusura | Prezzo chiusura | Commissioni | Swap | Profitto
+const MT_POSITIONS_COLUMN_MAP = [
+  'openDate', '', 'instrument', 'direction', 'lots', 'entryPrice',
+  'slPrice', 'tpPrice', 'closeDate', 'exitPrice', '', '', 'profit',
+];
+const MT_POSITIONS_HEADER_LABELS = [
+  'Apertura', 'Posizione', 'Simbolo', 'Tipo', 'Volume', 'Prezzo apertura',
+  'S/L', 'T/P', 'Chiusura', 'Prezzo chiusura', 'Commissioni', 'Swap', 'Profitto',
+];
+
+// Riconosce il report MetaTrader/FTMO cercando la riga "Posizioni" e la riga
+// di intestazione subito dopo, poi estrae le righe fino a "Ordini" (o a una
+// riga vuota). Ritorna null se il foglio non ha questo formato.
+function extractMetaTraderPositions(sheetRows) {
+  const positionsRowIdx = sheetRows.findIndex(r => String(r[0] || '').trim().toLowerCase() === 'posizioni');
+  if (positionsRowIdx === -1) return null;
+
+  const headerRowIdx = positionsRowIdx + 1;
+  const dataStart = headerRowIdx + 1;
+  const rows = [];
+  for (let i = dataStart; i < sheetRows.length; i++) {
+    const row = sheetRows[i];
+    const firstCell = String(row[0] || '').trim().toLowerCase();
+    if (!firstCell || firstCell === 'ordini' || firstCell === 'totale') break;
+    rows.push(MT_POSITIONS_COLUMN_MAP.map((_, idx) => {
+      const v = row[idx];
+      return v === null || v === undefined ? '' : String(v).trim();
+    }));
+  }
+  if (!rows.length) return null;
+  return rows;
+}
+
+function handleXlsxFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let workbook;
+    try {
+      workbook = XLSX.read(e.target.result, { type: 'array' });
+    } catch (err) {
+      toast('Impossibile leggere il file xlsx', true);
+      return;
+    }
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    // raw:true evita che SheetJS formatti i numeri con separatori delle
+    // migliaia / spazio dopo il segno meno (es. "-1 098.52"), che romperebbe
+    // il parseFloat più avanti nella pipeline di import.
+    const sheetRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+
+    const mtRows = extractMetaTraderPositions(sheetRows);
+    if (mtRows) {
+      csvHeaders = MT_POSITIONS_HEADER_LABELS;
+      csvRows = mtRows;
+      renderCsvMap(MT_POSITIONS_COLUMN_MAP);
+      toast(`Report MetaTrader riconosciuto: ${mtRows.length} posizioni trovate`);
+      return;
+    }
+
+    // Fallback: nessun formato MetaTrader riconosciuto, trattiamo il primo
+    // foglio come una tabella generica (prima riga = intestazioni).
+    if (!sheetRows.length) {
+      toast('Il file xlsx sembra vuoto', true);
+      return;
+    }
+    csvHeaders = sheetRows[0].map(h => String(h || '').trim());
+    csvRows = sheetRows.slice(1)
+      .filter(r => r.some(c => String(c || '').trim().length))
+      .map(r => csvHeaders.map((_, idx) => String(r[idx] === null || r[idx] === undefined ? '' : r[idx]).trim()));
+    renderCsvMap();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 function handleCsvFile(file) {
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls') || file.type.includes('spreadsheet')) {
+    handleXlsxFile(file);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = (e) => {
     const { headers, rows } = parseCsv(e.target.result);
@@ -1212,17 +1293,20 @@ document.getElementById('csv-dropzone').addEventListener('drop', (e) => {
   if (file) handleCsvFile(file);
 });
 
-function renderCsvMap() {
+function renderCsvMap(forcedMapping) {
   document.getElementById('csv-map-area').style.display = 'block';
   const grid = document.getElementById('csv-map-grid');
-  grid.innerHTML = csvHeaders.map((h, idx) => `
+  grid.innerHTML = csvHeaders.map((h, idx) => {
+    const guessed = forcedMapping ? (forcedMapping[idx] || '') : guessMapping(h);
+    return `
     <div class="csv-map-row">
       <label>${h}</label>
       <select class="csv-map-select" data-col="${idx}">
-        ${CSV_TARGET_FIELDS.map(f => `<option value="${f.key}" ${guessMapping(h) === f.key ? 'selected' : ''}>${f.label}</option>`).join('')}
+        ${CSV_TARGET_FIELDS.map(f => `<option value="${f.key}" ${guessed === f.key ? 'selected' : ''}>${f.label}</option>`).join('')}
       </select>
     </div>
-  `).join('');
+  `;
+  }).join('');
   document.getElementById('csv-preview-info').textContent = `${csvRows.length} righe trovate. Verifica la mappatura prima di importare.`;
   document.getElementById('csv-preview-head').innerHTML = csvHeaders.map(h => `<th class="txt">${h}</th>`).join('');
   document.getElementById('csv-preview-body').innerHTML = csvRows.slice(0, 5).map(r => `<tr>${r.map(c => `<td class="txt">${c}</td>`).join('')}</tr>`).join('');
