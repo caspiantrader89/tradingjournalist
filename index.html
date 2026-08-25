@@ -976,8 +976,8 @@ tbody tr:hover .row-actions{opacity:1;}
       <div class="dropzone" id="csv-dropzone">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         <div class="dz-title">Trascina un file CSV/XLSX o clicca per selezionarlo</div>
-        <div class="dz-sub">CSV: prima riga = intestazioni, colonne separate da virgola o punto e virgola. Riconosce anche i report .xlsx esportati da MetaTrader/FTMO (Report Cronistorico dei Trade).</div>
-        <input type="file" id="csv-file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
+        <div class="dz-sub">CSV: prima riga = intestazioni, colonne separate da virgola o punto e virgola. Riconosce anche i report .xlsx esportati da MetaTrader/FTMO (Report Cronistorico dei Trade) e gli export .xls "USDT-M Futures transactions" di Bitget/Bybit.</div>
+        <input type="file" id="csv-file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">
       </div>
       <div id="csv-repair-box" style="display:none; margin-top:16px; padding:14px 16px; border:1px solid var(--danger, #F14D68); border-radius:10px;">
         <div style="font-size:13px; color:var(--text-dim); margin-bottom:10px;">

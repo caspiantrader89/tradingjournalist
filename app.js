@@ -1154,6 +1154,111 @@ function extractMetaTraderPositions(sheetRows) {
   return rows;
 }
 
+// Colonne del report "Export USDT-M Futures transactions" di Bitget/Bybit.
+// A differenza del report MetaTrader, qui NON ci sono prezzo di entrata/uscita
+// né size: ogni riga è un movimento di ledger (apertura, chiusura, fee di
+// settlement, trasferimento tra wallet) con il PnL realizzato (Amount) e il
+// saldo del conto DOPO quel movimento (Wallet balance).
+const BITGET_EXPECTED_HEADERS = ['order', 'date', 'coin', 'futures', 'margin mode', 'type', 'amount', 'fee', 'wallet balance'];
+
+const BITGET_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'profit', 'notes'];
+const BITGET_HEADER_LABELS = [
+  'Data apertura (stimata)', 'Data chiusura', 'Simbolo', 'Direzione',
+  'Profitto netto (USDT)', 'Note',
+];
+
+// Ricostruisce i trade chiusi da un export Bitget/Bybit "USDT-M Futures
+// transactions". Ogni riga close_*/burst_close_* diventa un trade; l'apertura
+// viene abbinata FIFO alla open_long/open_short più vecchia non ancora usata
+// sullo stesso simbolo e stessa direzione (se non trovata, si usa la data di
+// chiusura come stima). Ritorna null se l'intestazione non corrisponde.
+function extractBitgetFuturesPositions(sheetRows) {
+  if (!sheetRows.length) return null;
+  const header = sheetRows[0].map(h => String(h || '').trim().toLowerCase());
+  const matches = BITGET_EXPECTED_HEADERS.every((h, idx) => header[idx] === h);
+  if (!matches) return null;
+
+  // Righe grezze con parsing minimo, ordinate cronologicamente: il formato
+  // data "YYYY-MM-DD HH:MM:SS" si ordina correttamente anche come stringa.
+  const raw = sheetRows.slice(1)
+    .map(r => ({
+      order: String(r[0] || '').trim(),
+      date: String(r[1] || '').trim(),
+      futures: String(r[3] || '').trim(),
+      type: String(r[5] || '').trim().toLowerCase(),
+      amount: parseFloat(String(r[6] === undefined || r[6] === null ? '' : r[6]).replace(',', '.')) || 0,
+      fee: parseFloat(String(r[7] === undefined || r[7] === null ? '' : r[7]).replace(',', '.')) || 0,
+      walletBalance: parseFloat(String(r[8] === undefined || r[8] === null ? '' : r[8]).replace(',', '.')),
+    }))
+    .filter(r => r.date && r.type);
+  if (!raw.length) return null;
+
+  raw.sort((a, b) => (a.date + a.order).localeCompare(b.date + b.order));
+
+  const openQueue = {}; // simbolo -> array di { date, dir, fee } in attesa di essere chiusi
+  const outRows = [];
+  let sumNetProfit = 0;
+  let firstDate = raw[0].date;
+  let lastWalletBalance = null;
+
+  raw.forEach(r => {
+    if (!isNaN(r.walletBalance)) lastWalletBalance = r.walletBalance;
+
+    if (r.type === 'open_long' || r.type === 'open_short') {
+      if (!r.futures || r.futures === 'NULL') return;
+      const dir = r.type === 'open_long' ? 'long' : 'short';
+      if (!openQueue[r.futures]) openQueue[r.futures] = [];
+      openQueue[r.futures].push({ date: r.date, dir, fee: r.fee });
+      return;
+    }
+
+    const isClose = r.type === 'close_long' || r.type === 'close_short' ||
+      r.type === 'burst_close_long' || r.type === 'burst_close_short';
+    if (!isClose || !r.futures || r.futures === 'NULL') return;
+
+    const dir = r.type.includes('long') ? 'long' : 'short';
+    const isBurst = r.type.startsWith('burst_close');
+
+    let openDate = r.date; // fallback: nessuna apertura corrispondente trovata
+    let openFee = 0;
+    const queue = openQueue[r.futures];
+    if (queue && queue.length) {
+      const idx = queue.findIndex(o => o.dir === dir);
+      if (idx !== -1) {
+        const matched = queue.splice(idx, 1)[0];
+        openDate = matched.date;
+        openFee = matched.fee;
+      }
+    }
+
+    const gross = r.amount;
+    const closeFee = r.fee;
+    const net = gross + closeFee + openFee; // PnL lordo + fee apertura + fee chiusura
+    sumNetProfit += net;
+
+    const notesParts = [
+      `Import Bitget/Bybit`,
+      `ordine ${r.order}`,
+      `PnL lordo ${gross.toFixed(2)} USDT`,
+      `fee apertura+chiusura ${(openFee + closeFee).toFixed(4)} USDT`,
+      `saldo wallet dopo: ${!isNaN(r.walletBalance) ? r.walletBalance.toFixed(2) : '-'} USDT`,
+    ];
+    if (isBurst) notesParts.push('⚠️ posizione liquidata (burst)');
+
+    outRows.push([
+      openDate,
+      r.date,
+      r.futures,
+      dir === 'long' ? 'LONG' : 'SHORT',
+      String(net),
+      notesParts.join(' · '),
+    ]);
+  });
+
+  if (!outRows.length) return null;
+  return outRows;
+}
+
 function handleXlsxFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -1176,6 +1281,15 @@ function handleXlsxFile(file) {
       csvRows = mtRows;
       renderCsvMap(MT_POSITIONS_COLUMN_MAP);
       toast(`Report MetaTrader riconosciuto: ${mtRows.length} posizioni trovate`);
+      return;
+    }
+
+    const bitgetRows = extractBitgetFuturesPositions(sheetRows);
+    if (bitgetRows) {
+      csvHeaders = BITGET_HEADER_LABELS;
+      csvRows = bitgetRows;
+      renderCsvMap(BITGET_COLUMN_MAP);
+      toast(`Export Bitget/Bybit riconosciuto: ${bitgetRows.length} chiusure trovate`);
       return;
     }
 
