@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cookie Policy — TradeJournalist</title>
+<style>
+:root{
+  --bg:#0A0D12; --surface:#141922; --surface-2:#191F2A; --border:#232B37; --border-soft:#1A212B;
+  --text:#E9EDF3; --text-dim:#8592A3; --text-faint:#4C5768; --blue:#5B8CFF; --green:#33C48B;
+  --amber:#E0A23C; --radius:10px; font-size:15px;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.65;}
+.wrap{max-width:820px; margin:0 auto; padding:48px 24px 100px;}
+.back{display:inline-flex; align-items:center; gap:6px; color:var(--text-dim); text-decoration:none; font-size:13.5px; margin-bottom:28px;}
+.back:hover{color:var(--text);}
+h1{font-size:26px; margin-bottom:6px;}
+.updated{color:var(--text-faint); font-size:13px; margin-bottom:34px;}
+h2{font-size:18px; margin:34px 0 10px; border-top:1px solid var(--border-soft); padding-top:26px;}
+h2:first-of-type{border-top:none; padding-top:0; margin-top:0;}
+p{color:var(--text-dim); margin-bottom:12px; font-size:14.5px;}
+strong{color:var(--text); font-weight:600;}
+table{width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:13.5px;}
+th, td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--border-soft); color:var(--text-dim); vertical-align:top;}
+th{color:var(--text); font-weight:600; background:var(--surface-2);}
+.tag{display:inline-block; padding:2px 8px; border-radius:5px; font-size:11.5px; font-weight:600;}
+.tag-nec{background:rgba(51,196,139,0.14); color:var(--green);}
+.tag-mkt{background:rgba(224,162,60,0.14); color:var(--amber);}
+.placeholder{background:var(--amber); color:#1a1300; padding:1px 7px; border-radius:5px; font-weight:600; font-size:12.5px;}
+.box{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin:18px 0;}
+a{color:var(--blue);}
+button.manage{background:var(--blue); color:#fff; border:none; border-radius:8px; padding:11px 18px; font-size:14px; font-weight:600; cursor:pointer;}
+button.manage:hover{opacity:.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">&larr; Torna a TradeJournalist</a>
+  <h1>Cookie Policy</h1>
+  <div class="updated">Ultimo aggiornamento: 25/08/2026 — Versione 1.0</div>
+
+  <div class="box" style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div>
+      <strong>Gestisci le tue preferenze</strong>
+      <p style="margin:4px 0 0;">Puoi modificare in ogni momento il consenso ai cookie non necessari.</p>
+    </div>
+    <button class="manage" id="reopen-cookie-prefs">Gestisci preferenze cookie</button>
+  </div>
+
+  <h2>Cosa sono i cookie</h2>
+  <p>
+    I cookie sono piccoli file di testo che i siti visitati inviano al dispositivo dell'utente, dove
+    vengono memorizzati per essere poi ritrasmessi agli stessi siti alla visita successiva. TradeJournalist
+    utilizza anche tecnologie simili (localStorage del browser) con la stessa finalità.
+  </p>
+
+  <h2>Cookie e tecnologie utilizzate</h2>
+  <table>
+    <tr><th>Nome</th><th>Tipo</th><th>Finalità</th><th>Durata</th></tr>
+    <tr>
+      <td>Sessione Firebase Authentication</td>
+      <td><span class="tag tag-nec">Necessario</span></td>
+      <td>Mantiene l'accesso effettuato, consente l'autenticazione sicura all'app</td>
+      <td>Fino al logout / scadenza sessione</td>
+    </tr>
+    <tr>
+      <td><code>cookie_consent</code> (localStorage)</td>
+      <td><span class="tag tag-nec">Necessario</span></td>
+      <td>Memorizza le preferenze cookie espresse dall'utente</td>
+      <td>12 mesi</td>
+    </tr>
+    <tr>
+      <td><code>trading_journal_data:*</code> (localStorage)</td>
+      <td><span class="tag tag-nec">Necessario</span></td>
+      <td>Copia locale dei dati del diario di trading, usata come backup offline</td>
+      <td>Fino a cancellazione manuale</td>
+    </tr>
+    <tr>
+      <td>Google Analytics (via Firebase Analytics)</td>
+      <td><span class="tag tag-mkt">Analitico — facoltativo</span></td>
+      <td>Statistiche di utilizzo del Servizio in forma aggregata (pagine visitate, eventi, dispositivo)</td>
+      <td>Fino a 14 mesi</td>
+    </tr>
+  </table>
+  <p>
+    Google Analytics viene caricato solo se l'utente acconsente esplicitamente alla categoria "Analitici"
+    tramite il banner cookie: nessuno script di analisi viene scaricato o eseguito prima di questa scelta.
+    Al momento il Servizio non utilizza cookie o tecnologie di marketing di terze parti.
+  </p>
+  <p>
+    I cookie/tecnologie contrassegnati come "Necessari" non richiedono consenso, in quanto indispensabili
+    all'erogazione del Servizio (art. 122 Codice Privacy). Tutti gli altri sono installati solo previo
+    consenso esplicito, revocabile in ogni momento tramite il pulsante "Gestisci preferenze cookie" sopra.
+  </p>
+
+  <h2>Cookie di terze parti</h2>
+  <p>
+    Il Servizio si appoggia a Google Firebase per autenticazione e memorizzazione dati; Google può
+    installare cookie tecnici propri necessari al funzionamento dei propri servizi. Per informazioni:
+    <a href="https://policies.google.com/technologies/cookies" target="_blank" rel="noopener">policies.google.com/technologies/cookies</a>.
+  </p>
+
+  <h2>Come disabilitare i cookie dal browser</h2>
+  <p>
+    Oltre alle preferenze offerte da questo Servizio, puoi gestire o eliminare i cookie direttamente
+    dalle impostazioni del tuo browser. Disabilitare i cookie necessari potrebbe impedire il corretto
+    funzionamento del Servizio (es. impossibilità di rimanere autenticati).
+  </p>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="cookie-consent.js"></script>
+<script>
+  document.getElementById('reopen-cookie-prefs').addEventListener('click', () => {
+    window.CookieConsent.openPreferences();
+  });
+</script>
+</body>
+</html>
