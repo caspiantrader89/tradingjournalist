@@ -101,6 +101,7 @@ function defaultState() {
     trades: [],
     movements: [],
     strategies: [],
+    csvMappings: {}, // firma intestazioni -> mappatura colonne scelta l'ultima volta
   };
 }
 
@@ -1041,6 +1042,13 @@ const CSV_TARGET_FIELDS = [
 
 let csvRows = [];
 let csvHeaders = [];
+let csvAutoDetected = false; // true per formati riconosciuti (MetaTrader, Bitget/Bybit): non serve ricordare la mappatura
+
+// Firma stabile delle intestazioni, usata come chiave per ricordare la
+// mappatura scelta a mano l'ultima volta per file con questa stessa struttura.
+function csvHeaderSignature(headers) {
+  return headers.map(h => String(h || '').trim().toLowerCase()).join('|');
+}
 
 function parseFlexibleDate(raw) {
   if (raw === null || raw === undefined) return null;
@@ -1279,6 +1287,7 @@ function handleXlsxFile(file) {
     if (mtRows) {
       csvHeaders = MT_POSITIONS_HEADER_LABELS;
       csvRows = mtRows;
+      csvAutoDetected = true;
       renderCsvMap(MT_POSITIONS_COLUMN_MAP);
       toast(`Report MetaTrader riconosciuto: ${mtRows.length} posizioni trovate`);
       return;
@@ -1288,6 +1297,7 @@ function handleXlsxFile(file) {
     if (bitgetRows) {
       csvHeaders = BITGET_HEADER_LABELS;
       csvRows = bitgetRows;
+      csvAutoDetected = true;
       renderCsvMap(BITGET_COLUMN_MAP);
       toast(`Export Bitget/Bybit riconosciuto: ${bitgetRows.length} chiusure trovate`);
       return;
@@ -1303,7 +1313,10 @@ function handleXlsxFile(file) {
     csvRows = sheetRows.slice(1)
       .filter(r => r.some(c => String(c || '').trim().length))
       .map(r => csvHeaders.map((_, idx) => String(r[idx] === null || r[idx] === undefined ? '' : r[idx]).trim()));
-    renderCsvMap();
+    csvAutoDetected = false;
+    const saved = STATE.csvMappings[csvHeaderSignature(csvHeaders)];
+    renderCsvMap(saved);
+    if (saved) toast('Mappatura colonne di un import precedente applicata automaticamente');
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1319,7 +1332,10 @@ function handleCsvFile(file) {
     const { headers, rows } = parseCsv(e.target.result);
     csvHeaders = headers;
     csvRows = rows;
-    renderCsvMap();
+    csvAutoDetected = false;
+    const saved = STATE.csvMappings[csvHeaderSignature(csvHeaders)];
+    renderCsvMap(saved);
+    if (saved) toast('Mappatura colonne di un import precedente applicata automaticamente');
   };
   reader.readAsText(file, 'UTF-8');
 }
@@ -1434,6 +1450,13 @@ document.getElementById('btn-cancel-import').addEventListener('click', () => {
 
 document.getElementById('btn-confirm-import').addEventListener('click', async () => {
   const mapping = Array.from(document.querySelectorAll('.csv-map-select')).map(s => s.value);
+
+  // Ricorda la mappatura scelta a mano per file con la stessa identica
+  // intestazione (es. lo stesso export di un exchange non ancora riconosciuto
+  // automaticamente), così i prossimi import non richiedono di rimappare tutto.
+  if (!csvAutoDetected && csvHeaders.length) {
+    STATE.csvMappings[csvHeaderSignature(csvHeaders)] = mapping;
+  }
 
   // Capitale iniziale: non è un campo per-trade, va preso una sola volta dalla
   // prima riga del CSV che ha un valore valido nella colonna mappata.
@@ -2203,6 +2226,7 @@ async function init() {
   if (!STATE.strategies) STATE.strategies = [];
   if (!STATE.trades) STATE.trades = [];
   if (!STATE.movements) STATE.movements = [];
+  if (!STATE.csvMappings) STATE.csvMappings = {};
 
   // migrate: add newly-introduced default instruments that aren't already present,
   // without touching user edits to existing ones
