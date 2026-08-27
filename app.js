@@ -1279,10 +1279,11 @@ const BYBIT_EXPECTED_HEADERS = [
   'filled price', 'funding', 'fee paid', 'cash flow', 'change', 'wallet balance',
   'action', 'time(utc)',
 ];
-const BYBIT_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'lots', 'entryPrice', 'exitPrice', 'profit', 'notes'];
+const BYBIT_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'lots', 'entryPrice', 'exitPrice', 'profit', 'notes', 'initialCapital'];
 const BYBIT_HEADER_LABELS = [
   'Apertura', 'Chiusura', 'Simbolo', 'Direzione', 'Quantità',
   'Prezzo entrata (medio)', 'Prezzo uscita (medio)', 'Profitto netto (USDT)', 'Note',
+  'Saldo conto (dal file)',
 ];
 
 // Il file Bybit ha una riga extra ("UID: ..., Company Name: ...") prima delle
@@ -1313,6 +1314,25 @@ function extractBybitAssetChanges(sheetRows) {
     .filter(row => row.type === 'TRADE' && row.contract && row.time && (row.action === 'OPEN' || row.action === 'CLOSE'));
 
   if (!raw.length) return null;
+
+  // Capitale iniziale: usiamo il saldo del conto (Wallet Balance) subito PRIMA
+  // della riga più vecchia di tutto l'export (non solo i trade: anche
+  // settlement, funding, trasferimenti), così il diario può poi sommare i
+  // profitti/perdite importati e ritrovare da solo il saldo attuale, invece
+  // di dover inserire il capitale a mano.
+  let initialCapital = null;
+  {
+    const allRows = sheetRows.slice(headerIdx + 1).filter(r => r.length && String(r[0] || '').trim());
+    let oldest = null;
+    for (const r of allRows) {
+      const time = String(r[14] || '').trim();
+      if (!time) continue;
+      if (!oldest || time < oldest.time) oldest = { time, walletBalance: num(r[12]), change: num(r[11]) };
+    }
+    if (oldest && !isNaN(oldest.walletBalance)) {
+      initialCapital = oldest.walletBalance - oldest.change;
+    }
+  }
 
   // Il file è esportato dal più recente al più vecchio: lo invertiamo per
   // ricostruire le posizioni in ordine cronologico.
@@ -1381,6 +1401,7 @@ function extractBybitAssetChanges(sheetRows) {
           String(exitPrice),
           String(pos.change),
           `Import Bybit (Asset Change Details) · size ${pos.closeQty}`,
+          '', // colonna capitale iniziale: valorizzata solo sulla prima riga, sotto
         ]);
       }
       positions[r.contract] = fresh();
@@ -1388,6 +1409,7 @@ function extractBybitAssetChanges(sheetRows) {
   });
 
   if (!outRows.length) return null;
+  if (initialCapital !== null) outRows[0][9] = String(initialCapital);
   return outRows;
 }
 
