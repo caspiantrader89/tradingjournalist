@@ -1304,6 +1304,7 @@ function extractBybitAssetChanges(sheetRows) {
       type: String(r[3] || '').trim().toUpperCase(),
       direction: String(r[4] || '').trim().toUpperCase(),
       quantity: Math.abs(num(r[5])),
+      positionAfter: num(r[6]), // "Position": size netta REALE del contratto dopo questo fill (riportata da Bybit)
       filledPrice: num(r[7]),
       change: num(r[11]),
       action: String(r[13] || '').trim().toUpperCase(),
@@ -1317,8 +1318,10 @@ function extractBybitAssetChanges(sheetRows) {
   // ricostruire le posizioni in ordine cronologico.
   raw.reverse();
 
+  const POS_EPS = 1e-6;
+
   const fresh = () => ({
-    qty: 0, dir: null, valid: false,
+    dir: null, valid: false,
     openTime: null, closeTime: null,
     openQty: 0, openNotional: 0,
     closeQty: 0, closeNotional: 0,
@@ -1330,45 +1333,57 @@ function extractBybitAssetChanges(sheetRows) {
 
   raw.forEach(r => {
     if (!positions[r.contract]) positions[r.contract] = fresh();
-    const pos = positions[r.contract];
+    let pos = positions[r.contract];
     const signedQty = r.direction === 'BUY' ? r.quantity : -r.quantity;
+    // Usiamo la colonna "Position" (riportata da Bybit) per sapere qual era la
+    // size netta REALE subito PRIMA di questo fill, invece di fidarci di un
+    // accumulatore interno che parte sempre da zero: se il file esportato
+    // inizia a metà di una posizione già aperta prima della finestra
+    // (es. l'utente aveva già una posizione XAU aperta prima della data di
+    // inizio export), un accumulatore che parte da zero non torna MAI più
+    // esattamente a zero per il resto del file, e tutti i cicli successivi
+    // restano invisibili — era questo il bug che faceva sparire XAU.
+    const positionBefore = r.positionAfter - signedQty;
+
+    if (Math.abs(positionBefore) < POS_EPS) {
+      // La posizione era piatta subito prima di questo fill: qui inizia un
+      // nuovo ciclo. Se c'era un ciclo precedente rimasto "appeso" (mai
+      // tornato a zero, es. per un errore di dati), lo scartiamo e ripartiamo.
+      positions[r.contract] = fresh();
+      pos = positions[r.contract];
+      pos.dir = r.positionAfter > 0 ? 'long' : 'short';
+      pos.openTime = r.time;
+      pos.valid = true;
+    }
 
     if (r.action === 'OPEN') {
-      if (pos.qty === 0 && !pos.dir) {
-        pos.dir = r.direction === 'BUY' ? 'long' : 'short';
-        pos.openTime = r.time;
-        pos.valid = true;
-      }
-      pos.qty += signedQty;
       pos.openQty += r.quantity;
       pos.openNotional += r.quantity * r.filledPrice;
-      pos.change += r.change;
     } else { // CLOSE
-      if (!pos.dir) pos.valid = false; // chiusura senza apertura nota nel range esportato: scartiamo il ciclo
-      pos.qty += signedQty;
       pos.closeQty += r.quantity;
       pos.closeNotional += r.quantity * r.filledPrice;
-      pos.change += r.change;
-      pos.closeTime = r.time;
+    }
+    pos.change += r.change;
+    pos.closeTime = r.time;
 
-      if (Math.abs(pos.qty) < 1e-9) {
-        if (pos.valid && pos.openQty > 0 && pos.closeQty > 0) {
-          const entryPrice = pos.openNotional / pos.openQty;
-          const exitPrice = pos.closeNotional / pos.closeQty;
-          outRows.push([
-            pos.openTime,
-            pos.closeTime,
-            r.contract,
-            pos.dir === 'long' ? 'LONG' : 'SHORT',
-            String(pos.closeQty),
-            String(entryPrice),
-            String(exitPrice),
-            String(pos.change),
-            `Import Bybit (Asset Change Details) · size ${pos.closeQty}`,
-          ]);
-        }
-        positions[r.contract] = fresh();
+    if (Math.abs(r.positionAfter) < POS_EPS) {
+      // La posizione (reale, da Bybit) è tornata a zero: ciclo completo.
+      if (pos.valid && pos.openQty > 0 && pos.closeQty > 0) {
+        const entryPrice = pos.openNotional / pos.openQty;
+        const exitPrice = pos.closeNotional / pos.closeQty;
+        outRows.push([
+          pos.openTime,
+          pos.closeTime,
+          r.contract,
+          pos.dir === 'long' ? 'LONG' : 'SHORT',
+          String(pos.closeQty),
+          String(entryPrice),
+          String(exitPrice),
+          String(pos.change),
+          `Import Bybit (Asset Change Details) · size ${pos.closeQty}`,
+        ]);
       }
+      positions[r.contract] = fresh();
     }
   });
 
