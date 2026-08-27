@@ -1267,6 +1267,125 @@ function extractBitgetFuturesPositions(sheetRows) {
   return outRows;
 }
 
+// Colonne del report "Asset Change Details" esportato da Bybit (Assets →
+// Financial Records → Change Details, formato .csv). A differenza del report
+// Bitget/Bitget-style sopra, qui ogni riga è un singolo fill (esecuzione
+// parziale) con la size del contratto (Quantity), il prezzo di quel fill
+// (Filled Price) e "Action" = OPEN/CLOSE. Una posizione può aprirsi/chiudersi
+// con più fill parziali consecutivi sullo stesso simbolo: li aggreghiamo
+// finché la size netta (tracciata dalla colonna "Position") non torna a zero.
+const BYBIT_EXPECTED_HEADERS = [
+  'uid', 'currency', 'contract', 'type', 'direction', 'quantity', 'position',
+  'filled price', 'funding', 'fee paid', 'cash flow', 'change', 'wallet balance',
+  'action', 'time(utc)',
+];
+const BYBIT_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'lots', 'entryPrice', 'exitPrice', 'profit', 'notes'];
+const BYBIT_HEADER_LABELS = [
+  'Apertura', 'Chiusura', 'Simbolo', 'Direzione', 'Quantità',
+  'Prezzo entrata (medio)', 'Prezzo uscita (medio)', 'Profitto netto (USDT)', 'Note',
+];
+
+// Il file Bybit ha una riga extra ("UID: ..., Company Name: ...") prima delle
+// vere intestazioni: cerchiamo quindi la riga che inizia con "Uid" invece di
+// assumere che sia sempre la prima. Ritorna null se il formato non corrisponde.
+function extractBybitAssetChanges(sheetRows) {
+  const headerIdx = sheetRows.findIndex(r => String(r[0] || '').trim().toLowerCase() === 'uid');
+  if (headerIdx === -1) return null;
+  const header = sheetRows[headerIdx].map(h => String(h || '').trim().toLowerCase());
+  const matches = BYBIT_EXPECTED_HEADERS.every((h, idx) => header[idx] === h);
+  if (!matches) return null;
+
+  const num = (v) => parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.')) || 0;
+
+  const raw = sheetRows.slice(headerIdx + 1)
+    .filter(r => r.length && String(r[0] || '').trim())
+    .map(r => ({
+      contract: String(r[2] || '').trim(),
+      type: String(r[3] || '').trim().toUpperCase(),
+      direction: String(r[4] || '').trim().toUpperCase(),
+      quantity: Math.abs(num(r[5])),
+      filledPrice: num(r[7]),
+      change: num(r[11]),
+      action: String(r[13] || '').trim().toUpperCase(),
+      time: String(r[14] || '').trim(),
+    }))
+    .filter(row => row.type === 'TRADE' && row.contract && row.time && (row.action === 'OPEN' || row.action === 'CLOSE'));
+
+  if (!raw.length) return null;
+
+  // Il file è esportato dal più recente al più vecchio: lo invertiamo per
+  // ricostruire le posizioni in ordine cronologico.
+  raw.reverse();
+
+  const fresh = () => ({
+    qty: 0, dir: null, valid: false,
+    openTime: null, closeTime: null,
+    openQty: 0, openNotional: 0,
+    closeQty: 0, closeNotional: 0,
+    change: 0,
+  });
+
+  const positions = {}; // contratto -> accumulatore della posizione in corso
+  const outRows = [];
+
+  raw.forEach(r => {
+    if (!positions[r.contract]) positions[r.contract] = fresh();
+    const pos = positions[r.contract];
+    const signedQty = r.direction === 'BUY' ? r.quantity : -r.quantity;
+
+    if (r.action === 'OPEN') {
+      if (pos.qty === 0 && !pos.dir) {
+        pos.dir = r.direction === 'BUY' ? 'long' : 'short';
+        pos.openTime = r.time;
+        pos.valid = true;
+      }
+      pos.qty += signedQty;
+      pos.openQty += r.quantity;
+      pos.openNotional += r.quantity * r.filledPrice;
+      pos.change += r.change;
+    } else { // CLOSE
+      if (!pos.dir) pos.valid = false; // chiusura senza apertura nota nel range esportato: scartiamo il ciclo
+      pos.qty += signedQty;
+      pos.closeQty += r.quantity;
+      pos.closeNotional += r.quantity * r.filledPrice;
+      pos.change += r.change;
+      pos.closeTime = r.time;
+
+      if (Math.abs(pos.qty) < 1e-9) {
+        if (pos.valid && pos.openQty > 0 && pos.closeQty > 0) {
+          const entryPrice = pos.openNotional / pos.openQty;
+          const exitPrice = pos.closeNotional / pos.closeQty;
+          outRows.push([
+            pos.openTime,
+            pos.closeTime,
+            r.contract,
+            pos.dir === 'long' ? 'LONG' : 'SHORT',
+            String(pos.closeQty),
+            String(entryPrice),
+            String(exitPrice),
+            String(pos.change),
+            `Import Bybit (Asset Change Details) · size ${pos.closeQty}`,
+          ]);
+        }
+        positions[r.contract] = fresh();
+      }
+    }
+  });
+
+  if (!outRows.length) return null;
+  return outRows;
+}
+
+// Converte il testo grezzo di un CSV in una matrice di righe grezze, senza
+// assumere che la prima riga sia l'intestazione (serve ai riconoscitori sopra,
+// che cercano da soli la riga di intestazione corretta, es. per i file Bybit
+// che hanno una riga extra prima delle vere colonne).
+function csvTextToRows(text) {
+  const delim = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  return lines.map(l => l.split(delim).map(c => c.trim()));
+}
+
 function handleXlsxFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -1290,6 +1409,16 @@ function handleXlsxFile(file) {
       csvAutoDetected = true;
       renderCsvMap(MT_POSITIONS_COLUMN_MAP);
       toast(`Report MetaTrader riconosciuto: ${mtRows.length} posizioni trovate`);
+      return;
+    }
+
+    const bybitRows = extractBybitAssetChanges(sheetRows);
+    if (bybitRows) {
+      csvHeaders = BYBIT_HEADER_LABELS;
+      csvRows = bybitRows;
+      csvAutoDetected = true;
+      renderCsvMap(BYBIT_COLUMN_MAP);
+      toast(`Export Bybit riconosciuto: ${bybitRows.length} posizioni chiuse trovate`);
       return;
     }
 
@@ -1329,7 +1458,30 @@ function handleCsvFile(file) {
   }
   const reader = new FileReader();
   reader.onload = (e) => {
-    const { headers, rows } = parseCsv(e.target.result);
+    const text = e.target.result;
+    const sheetRows = csvTextToRows(text);
+
+    const bybitRows = extractBybitAssetChanges(sheetRows);
+    if (bybitRows) {
+      csvHeaders = BYBIT_HEADER_LABELS;
+      csvRows = bybitRows;
+      csvAutoDetected = true;
+      renderCsvMap(BYBIT_COLUMN_MAP);
+      toast(`Export Bybit riconosciuto: ${bybitRows.length} posizioni chiuse trovate`);
+      return;
+    }
+
+    const bitgetRows = extractBitgetFuturesPositions(sheetRows);
+    if (bitgetRows) {
+      csvHeaders = BITGET_HEADER_LABELS;
+      csvRows = bitgetRows;
+      csvAutoDetected = true;
+      renderCsvMap(BITGET_COLUMN_MAP);
+      toast(`Export Bitget/Bybit riconosciuto: ${bitgetRows.length} chiusure trovate`);
+      return;
+    }
+
+    const { headers, rows } = parseCsv(text);
     csvHeaders = headers;
     csvRows = rows;
     csvAutoDetected = false;
