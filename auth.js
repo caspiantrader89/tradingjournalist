@@ -23,12 +23,6 @@ function showVerifyEmail(user) {
   document.getElementById('verify-email-screen').style.display = 'flex';
 }
 
-// Un provider è considerato "pre-verificato" se l'account terzo (es. Google)
-// garantisce già la titolarità dell'indirizzo email.
-function isPreVerifiedProvider(user) {
-  return user.providerData.some(p => p.providerId === 'google.com');
-}
-
 function translateAuthError(err) {
   const map = {
     'auth/invalid-email': 'Email non valida.',
@@ -58,8 +52,7 @@ auth.onAuthStateChanged(async (user) => {
     const label = document.getElementById('user-email-label');
     if (label) label.textContent = user.email || user.displayName || 'Account';
 
-    const verified = user.emailVerified || isPreVerifiedProvider(user);
-    if (!verified) {
+    if (!user.emailVerified) {
       showVerifyEmail(user);
       return;
     }
@@ -111,26 +104,6 @@ document.getElementById('register-btn').addEventListener('click', async () => {
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
     await saveConsentProfile(cred.user, marketingOk);
     await cred.user.sendEmailVerification();
-  } catch (err) {
-    errBox.textContent = translateAuthError(err);
-  } finally {
-    setLoginBusy(false);
-  }
-});
-
-document.getElementById('google-signin-btn').addEventListener('click', async () => {
-  const errBox = document.getElementById('login-error');
-  const termsOk = document.getElementById('consent-terms').checked;
-  errBox.textContent = '';
-  if (!termsOk) { errBox.textContent = 'Devi accettare Termini di Servizio e Informativa Privacy per continuare.'; return; }
-  const marketingOk = document.getElementById('consent-marketing').checked;
-  const provider = new firebase.auth.GoogleAuthProvider();
-  setLoginBusy(true);
-  try {
-    const result = await auth.signInWithPopup(provider);
-    if (result.additionalUserInfo && result.additionalUserInfo.isNewUser) {
-      await saveConsentProfile(result.user, marketingOk);
-    }
   } catch (err) {
     errBox.textContent = translateAuthError(err);
   } finally {
