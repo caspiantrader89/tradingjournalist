@@ -1266,10 +1266,10 @@ function extractMetaTraderPositions(sheetRows) {
 // saldo del conto DOPO quel movimento (Wallet balance).
 const BITGET_EXPECTED_HEADERS = ['order', 'date', 'coin', 'futures', 'margin mode', 'type', 'amount', 'fee', 'wallet balance'];
 
-const BITGET_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'profit', 'notes'];
+const BITGET_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'profit', 'notes', 'initialCapital'];
 const BITGET_HEADER_LABELS = [
   'Data apertura (stimata)', 'Data chiusura', 'Simbolo', 'Direzione',
-  'Profitto netto (USDT)', 'Note',
+  'Profitto netto (USDT)', 'Note', 'Saldo conto (dal file)',
 ];
 
 // Ricostruisce i trade chiusi da un export Bitget/Bybit "USDT-M Futures
@@ -1299,6 +1299,19 @@ function extractBitgetFuturesPositions(sheetRows) {
   if (!raw.length) return null;
 
   raw.sort((a, b) => (a.date + a.order).localeCompare(b.date + b.order));
+
+  // Capitale iniziale: usiamo il saldo wallet (Wallet balance) subito PRIMA della
+  // riga più vecchia di tutto l'export (aperture, chiusure, fee di settlement,
+  // trasferimenti compresi), così il diario può poi sommare i PnL e le fee
+  // importate e ritrovare da solo il saldo attuale, invece di doverlo inserire
+  // a mano — stessa logica usata per Bybit/MetaTrader.
+  let initialCapital = null;
+  for (const r of raw) {
+    if (!isNaN(r.walletBalance)) {
+      initialCapital = r.walletBalance - r.amount - r.fee;
+      break;
+    }
+  }
 
   const openQueue = {}; // simbolo -> array di { date, dir, fee } in attesa di essere chiusi
   const outRows = [];
@@ -1361,6 +1374,7 @@ function extractBitgetFuturesPositions(sheetRows) {
   });
 
   if (!outRows.length) return null;
+  if (initialCapital !== null) outRows[0][6] = String(initialCapital);
   return outRows;
 }
 
