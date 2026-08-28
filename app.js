@@ -1734,7 +1734,30 @@ document.getElementById('btn-cancel-import').addEventListener('click', () => {
   document.getElementById('csv-file').value = '';
 });
 
-document.getElementById('btn-confirm-import').addEventListener('click', async () => {
+document.getElementById('btn-confirm-import').addEventListener('click', () => {
+  // Se ci sono già operazioni o movimenti importati in precedenza, chiediamo come
+  // procedere: molti export (MetaTrader/FTMO) contengono SEMPRE lo storico
+  // completo del conto, quindi ri-importarli in "aggiunta" creerebbe duplicati.
+  const hasPreviousImport = STATE.trades.some(t => t.source === 'import') || STATE.movements.some(m => m.source === 'import');
+  if (!hasPreviousImport) { runCsvImport('append'); return; }
+
+  openModal(`
+    <h3>Come vuoi importare questo file?</h3>
+    <p>Risultano già operazioni e/o movimenti importati in precedenza.</p>
+    <p>Se questo file è un export <b>completo</b> dello storico del conto (es. report MetaTrader/FTMO aggiornato), scegli <b>Sostituisci</b>: evita di duplicare operazioni e depositi/prelievi già presenti. Se invece contiene <b>solo</b> dati nuovi mai importati prima, scegli <b>Aggiungi</b>.</p>
+    <div class="modal-actions" style="flex-direction:column; gap:8px; margin-top:16px;">
+      <button class="btn btn-primary" id="import-mode-replace" style="width:100%;">Sostituisci import precedenti</button>
+      <button class="btn btn-ghost" id="import-mode-append" style="width:100%;">Aggiungi ai dati esistenti</button>
+      <button class="btn btn-ghost" id="import-mode-cancel" style="width:100%;">Annulla</button>
+    </div>
+    <p style="font-size:12px; color:var(--text-dim); margin-top:12px;">"Sostituisci" rimuove solo le operazioni e i movimenti importati da file in precedenza: i trade e i movimenti inseriti a mano non vengono toccati.</p>
+  `);
+  document.getElementById('import-mode-replace').onclick = () => { closeModal(); runCsvImport('replace'); };
+  document.getElementById('import-mode-append').onclick = () => { closeModal(); runCsvImport('append'); };
+  document.getElementById('import-mode-cancel').onclick = () => { closeModal(); };
+});
+
+async function runCsvImport(mode) {
   const mapping = Array.from(document.querySelectorAll('.csv-map-select')).map(s => s.value);
 
   // Ricorda la mappatura scelta a mano per file con la stessa identica
@@ -1767,6 +1790,11 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
   const notesColIdx = mapping.indexOf('notes');
   const isBalanceRow = (row) => directionColIdx !== -1 && /^(balance|saldo|deposit|prelievo|withdraw)/i.test((row[directionColIdx] || '').trim());
 
+  if (mode === 'replace') {
+    STATE.trades = STATE.trades.filter(t => t.source !== 'import');
+    STATE.movements = STATE.movements.filter(m => m.source !== 'import');
+  }
+
   let imported = 0;
   let importedMovements = 0;
   csvRows.forEach(row => {
@@ -1782,11 +1810,12 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
         amount: Math.abs(amount),
         date: (d ? d : new Date()).toISOString(),
         note: notesColIdx !== -1 ? (row[notesColIdx] || '') : '',
+        source: 'import',
       });
       importedMovements++;
       return;
     }
-    const t = { id: uid(), status: 'CLOSED', direction: 'BUY', flag: '', link1: '', link2: '', checklist: {} };
+    const t = { id: uid(), status: 'CLOSED', direction: 'BUY', flag: '', link1: '', link2: '', checklist: {}, source: 'import' };
     mapping.forEach((key, idx) => {
       if (!key || key === 'initialCapital') return;
       const val = row[idx];
@@ -1824,9 +1853,10 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
   const parts = [`${imported} operazioni importate`];
   if (importedMovements) parts.push(`${importedMovements} movimenti (depositi/prelievi) importati`);
   if (importedCapital !== null) parts.push(`capitale iniziale aggiornato a ${fmtMoney(importedCapital)}`);
+  if (mode === 'replace') parts.push('import precedenti sostituiti');
   toast(parts.join(' · '));
   showView('registro');
-});
+}
 
 /* ---------------- rendering: changelog ---------------- */
 
