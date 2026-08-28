@@ -89,28 +89,6 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 });
 
-document.getElementById('register-btn').addEventListener('click', async () => {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-password').value;
-  const errBox = document.getElementById('login-error');
-  const termsOk = document.getElementById('consent-terms').checked;
-  const marketingOk = document.getElementById('consent-marketing').checked;
-  errBox.textContent = '';
-  if (!email || !pass) { errBox.textContent = 'Inserisci email e password.'; return; }
-  if (pass.length < 6) { errBox.textContent = 'La password deve avere almeno 6 caratteri.'; return; }
-  if (!termsOk) { errBox.textContent = 'Devi accettare Termini di Servizio e Informativa Privacy per registrarti.'; return; }
-  setLoginBusy(true);
-  try {
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
-    await saveConsentProfile(cred.user, marketingOk);
-    await cred.user.sendEmailVerification();
-  } catch (err) {
-    errBox.textContent = translateAuthError(err);
-  } finally {
-    setLoginBusy(false);
-  }
-});
-
 document.getElementById('forgot-password-link').addEventListener('click', async (e) => {
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim();
@@ -182,26 +160,6 @@ if (verifyLogoutLink) verifyLogoutLink.addEventListener('click', (e) => {
   e.preventDefault();
   auth.signOut();
 });
-
-/* ---------- Consenso registrazione → Firestore ---------- */
-
-const CONSENT_VERSION = 1;
-
-async function saveConsentProfile(user, marketingOk) {
-  try {
-    await db.collection('users').doc(user.uid).set({
-      email: user.email || null,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      termsAccepted: true,
-      termsAcceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      consentVersion: CONSENT_VERSION,
-      marketingConsent: !!marketingOk,
-      marketingConsentAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  } catch (e) {
-    console.warn('Impossibile salvare il profilo di consenso', e);
-  }
-}
 
 /* ---------- Pannello "Privacy e dati" ---------- */
 
