@@ -89,19 +89,36 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 });
 
-document.getElementById('forgot-password-link').addEventListener('click', async (e) => {
+const forgotPasswordLink = document.getElementById('forgot-password-link');
+forgotPasswordLink.addEventListener('click', async (e) => {
   e.preventDefault();
-  const email = document.getElementById('login-email').value.trim();
-  const errBox = document.getElementById('login-error');
-  errBox.textContent = '';
-  if (!email) { errBox.textContent = 'Inserisci la tua email nel campo sopra, poi clicca di nuovo.'; return; }
+  const emailInput = document.getElementById('login-email');
+  const email = emailInput.value.trim();
+  const msgBox = document.getElementById('forgot-password-msg');
+  msgBox.style.color = '';
+
+  if (!email) {
+    msgBox.style.color = 'var(--amber, #E0A23C)';
+    msgBox.textContent = 'Inserisci prima la tua email nel campo sopra.';
+    emailInput.focus();
+    return;
+  }
+
+  msgBox.style.color = 'var(--text-dim, #8592A3)';
+  msgBox.textContent = 'Invio in corso...';
+  forgotPasswordLink.style.pointerEvents = 'none';
+  forgotPasswordLink.style.opacity = '0.6';
+
   try {
     await auth.sendPasswordResetEmail(email);
-    errBox.style.color = 'var(--pos, #2ecc71)';
-    errBox.textContent = 'Email per reimpostare la password inviata.';
+    msgBox.style.color = 'var(--green, #33C48B)';
+    msgBox.textContent = 'Ti abbiamo inviato un link per reimpostare la password. Controlla la posta (e lo spam).';
   } catch (err) {
-    errBox.style.color = '';
-    errBox.textContent = translateAuthError(err);
+    msgBox.style.color = 'var(--red, #F14D68)';
+    msgBox.textContent = translateAuthError(err);
+  } finally {
+    forgotPasswordLink.style.pointerEvents = '';
+    forgotPasswordLink.style.opacity = '';
   }
 });
 
