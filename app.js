@@ -177,6 +177,7 @@ const CHANGELOG = [
 
 let STATE = null;
 let CHARTS = {};
+let BUBBLE_RAF_ID = null;
 
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
 
@@ -395,6 +396,13 @@ function weekdayPL() {
   return { labels: order.map(i => dayNames[i]), values: order.map(i => totals[i]) };
 }
 
+function topWinsLosses(n = 6) {
+  const trades = closedTrades().filter(t => t.profit !== null && t.profit !== undefined && t.profit !== 0);
+  const wins = trades.filter(t => t.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, n);
+  const losses = trades.filter(t => t.profit < 0).sort((a, b) => a.profit - b.profit).slice(0, n);
+  return { wins, losses };
+}
+
 function lastNRValues(n) {
   const trades = closedTrades().slice().sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate));
   const last = trades.slice(-n);
@@ -457,6 +465,7 @@ function renderDashboard() {
   }
   safeRender('renderPerInstrumentTable', renderPerInstrumentTable);
   safeRender('renderPerStrategyTable', renderPerStrategyTable);
+  safeRender('renderBubbleChart', renderBubbleChart);
 }
 
 
@@ -632,6 +641,215 @@ function renderR50Chart() {
       }
     }
   });
+}
+
+/* ---------------- rendering: bubble chart top vincite/perdite ---------------- */
+
+function renderBubbleChart() {
+  const stage = document.getElementById('bubble-stage');
+  if (!stage) return;
+
+  if (BUBBLE_RAF_ID) { cancelAnimationFrame(BUBBLE_RAF_ID); BUBBLE_RAF_ID = null; }
+
+  const { wins, losses } = topWinsLosses(6);
+  const items = [
+    ...wins.map(t => ({ t, kind: 'win' })),
+    ...losses.map(t => ({ t, kind: 'loss' })),
+  ];
+
+  stage.innerHTML = '';
+  stage.classList.remove('empty');
+
+  if (!items.length) {
+    stage.classList.add('empty');
+    stage.innerHTML = `
+      <div class="empty-state" style="padding:0;">
+        <div class="et">Nessuna operazione chiusa ancora</div>
+        <div class="es">Le vincite e le perdite più grandi appariranno qui.</div>
+      </div>`;
+    return;
+  }
+
+  const W = stage.clientWidth || 600;
+  const H = stage.clientHeight || 380;
+  const maxAbs = Math.max(...items.map(i => Math.abs(i.t.profit)));
+  const MIN_R = 40;
+  const MAX_R = Math.max(MIN_R + 10, Math.min(115, H / 2 - 12));
+
+  // stato fisico di ogni bolla: posizione, raggio, velocità di deriva
+  const bubbles = items.map(i => {
+    const ratio = maxAbs ? Math.sqrt(Math.abs(i.t.profit) / maxAbs) : 1;
+    const r = MIN_R + ratio * (MAX_R - MIN_R);
+    const speed = 0.35 + Math.random() * 0.35; // deriva lenta, non frenetica
+    const angle = Math.random() * Math.PI * 2;
+    return {
+      t: i.t, kind: i.kind, r,
+      x: r + Math.random() * Math.max(1, W - 2 * r),
+      y: r + Math.random() * Math.max(1, H - 2 * r),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      dragging: false,
+      el: null,
+    };
+  });
+
+  // separazione iniziale, per non far partire due bolle sovrapposte
+  for (let iter = 0; iter < 220; iter++) {
+    resolveBubbleCollisions(bubbles, W, H, { separateOnly: true });
+  }
+
+  bubbles.forEach(b => {
+    const el = document.createElement('div');
+    el.className = `bubble ${b.kind}`;
+    const d = b.r * 2;
+    el.style.width = d + 'px';
+    el.style.height = d + 'px';
+    el.style.left = (b.x - b.r) + 'px';
+    el.style.top = (b.y - b.r) + 'px';
+
+    const fontPair = Math.max(11, Math.min(15, b.r / 5.5));
+    const fontAmt = Math.max(11, Math.min(18, b.r / 4.4));
+    el.innerHTML = `
+      <div class="bubble-pair" style="font-size:${fontPair}px;">${b.t.instrument}</div>
+      <div class="bubble-amount" style="font-size:${fontAmt}px;">${fmtMoney(b.t.profit, { signed: true })}</div>
+    `;
+
+    b.el = el;
+    makeBubbleDraggable(b, stage);
+    stage.appendChild(el);
+  });
+
+  startBubblePhysics(stage, bubbles);
+}
+
+// risolve le collisioni bolla-bolla (separazione + scambio elastico di velocità)
+// e il rimbalzo sui bordi dello stage. Le bolle trascinate dal mouse spingono
+// le altre ma non vengono a loro volta spostate dalla fisica.
+const BUBBLE_MAX_SPEED = 2.6;       // limite di velocità "di deriva" (px/frame)
+const BUBBLE_DRAG_PUSH = 1.1;       // spinta gentile impressa quando trascini una bolla contro un'altra
+const BUBBLE_RESTITUTION = 0.85;    // smorzamento negli urti normali, per evitare accumuli di energia
+
+function resolveBubbleCollisions(bubbles, W, H, opts = {}) {
+  for (let a = 0; a < bubbles.length; a++) {
+    for (let b = a + 1; b < bubbles.length; b++) {
+      const A = bubbles[a], B = bubbles[b];
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      const minDist = A.r + B.r;
+      if (dist < minDist) {
+        const overlap = (minDist - dist) / 2;
+        const ux = dx / dist, uy = dy / dist;
+        if (!A.dragging) { A.x -= ux * overlap; A.y -= uy * overlap; }
+        if (!B.dragging) { B.x += ux * overlap; B.y += uy * overlap; }
+
+        if (!opts.separateOnly) {
+          if (A.dragging || B.dragging) {
+            // una delle due è "in mano": spinta costante e contenuta, indipendente
+            // dalla velocità del mouse (che può essere molto più alta e frenetica)
+            if (!A.dragging) { A.vx -= ux * BUBBLE_DRAG_PUSH; A.vy -= uy * BUBBLE_DRAG_PUSH; }
+            if (!B.dragging) { B.vx += ux * BUBBLE_DRAG_PUSH; B.vy += uy * BUBBLE_DRAG_PUSH; }
+          } else {
+            // scontro elastico smorzato lungo la normale, massa ~ area (r^2)
+            const mA = A.r * A.r, mB = B.r * B.r;
+            const va = A.vx * ux + A.vy * uy;
+            const vb = B.vx * ux + B.vy * uy;
+            const newVa = (va * (mA - mB) + 2 * mB * vb) / (mA + mB);
+            const newVb = (vb * (mB - mA) + 2 * mA * va) / (mA + mB);
+            A.vx += (newVa - va) * ux * BUBBLE_RESTITUTION;
+            A.vy += (newVa - va) * uy * BUBBLE_RESTITUTION;
+            B.vx += (newVb - vb) * ux * BUBBLE_RESTITUTION;
+            B.vy += (newVb - vb) * uy * BUBBLE_RESTITUTION;
+          }
+        }
+      }
+    }
+  }
+  bubbles.forEach(b => {
+    if (b.dragging) return;
+    if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
+    if (b.x + b.r > W) { b.x = W - b.r; b.vx = -Math.abs(b.vx); }
+    if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+    if (b.y + b.r > H) { b.y = H - b.r; b.vy = -Math.abs(b.vy); }
+
+    // limite di velocità: evita che gli urti ripetuti accumulino energia
+    // e mandino le bolle in giro come impazzite
+    const speed = Math.hypot(b.vx, b.vy);
+    if (speed > BUBBLE_MAX_SPEED) {
+      b.vx = (b.vx / speed) * BUBBLE_MAX_SPEED;
+      b.vy = (b.vy / speed) * BUBBLE_MAX_SPEED;
+    }
+  });
+}
+
+function startBubblePhysics(stage, bubbles) {
+  function tick() {
+    // lo stage può essere cambiato view/rimosso: fermati se non è più in pagina
+    if (!document.body.contains(stage)) { BUBBLE_RAF_ID = null; return; }
+
+    const W = stage.clientWidth || 600;
+    const H = stage.clientHeight || 380;
+
+    bubbles.forEach(b => {
+      if (b.dragging) return;
+      b.x += b.vx;
+      b.y += b.vy;
+    });
+
+    resolveBubbleCollisions(bubbles, W, H);
+
+    bubbles.forEach(b => {
+      b.el.style.left = (b.x - b.r) + 'px';
+      b.el.style.top = (b.y - b.r) + 'px';
+    });
+
+    BUBBLE_RAF_ID = requestAnimationFrame(tick);
+  }
+  BUBBLE_RAF_ID = requestAnimationFrame(tick);
+}
+
+function makeBubbleDraggable(bubble, container) {
+  const el = bubble.el;
+  let offX = 0, offY = 0;
+  let lastX = 0, lastY = 0, lastT = 0;
+
+  el.addEventListener('pointerdown', (e) => {
+    bubble.dragging = true;
+    bubble.vx = 0; bubble.vy = 0;
+    el.classList.add('dragging');
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    const rect = el.getBoundingClientRect();
+    offX = e.clientX - rect.left - bubble.r;
+    offY = e.clientY - rect.top - bubble.r;
+    lastX = e.clientX; lastY = e.clientY; lastT = performance.now();
+    e.preventDefault();
+  });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!bubble.dragging) return;
+    const cRect = container.getBoundingClientRect();
+    bubble.x = e.clientX - cRect.left - offX;
+    bubble.y = e.clientY - cRect.top - offY;
+
+    const now = performance.now();
+    const dt = Math.max(1, now - lastT);
+    // velocità "di lancio": derivata dal movimento del mouse, usata al rilascio
+    bubble.vx = (e.clientX - lastX) / dt * 8;
+    bubble.vy = (e.clientY - lastY) / dt * 8;
+    lastX = e.clientX; lastY = e.clientY; lastT = now;
+  });
+
+  const stopDrag = (e) => {
+    if (!bubble.dragging) return;
+    bubble.dragging = false;
+    el.classList.remove('dragging');
+    // limita la velocità di lancio per non farla schizzare via troppo forte
+    const maxV = BUBBLE_MAX_SPEED * 1.4;
+    bubble.vx = Math.max(-maxV, Math.min(maxV, bubble.vx));
+    bubble.vy = Math.max(-maxV, Math.min(maxV, bubble.vy));
+    try { el.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  };
+  el.addEventListener('pointerup', stopDrag);
+  el.addEventListener('pointercancel', stopDrag);
 }
 
 /* ---------------- rendering: registro ---------------- */

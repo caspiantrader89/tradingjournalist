@@ -159,6 +159,44 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 .chart-wrap{position:relative; height:230px;}
 .chart-wrap.small{height:170px;}
 
+/* bubble chart — top vincite/perdite trascinabili */
+.bubble-stage{
+  position:relative; height:380px; border-radius:12px; overflow:hidden;
+  background:radial-gradient(ellipse at 50% 0%, rgba(91,140,255,0.07), transparent 60%), var(--surface-2);
+  border:1px solid var(--border-soft);
+}
+.bubble-stage.empty{display:flex; align-items:center; justify-content:center;}
+.bubble{
+  position:absolute; border-radius:50%; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; text-align:center; padding:6px;
+  cursor:grab; user-select:none; touch-action:none;
+  transition:box-shadow .18s ease;
+}
+.bubble:active{cursor:grabbing;}
+.bubble.dragging{z-index:50; box-shadow:0 20px 50px rgba(0,0,0,0.5) !important;}
+.bubble.win{
+  background:radial-gradient(circle at 32% 28%, rgba(51,196,139,0.55), rgba(51,196,139,0.14) 72%);
+  border:1.5px solid rgba(51,196,139,0.65);
+  box-shadow:0 0 0 1px rgba(51,196,139,0.08), 0 10px 28px rgba(51,196,139,0.16);
+}
+.bubble.loss{
+  background:radial-gradient(circle at 32% 28%, rgba(241,77,104,0.55), rgba(241,77,104,0.14) 72%);
+  border:1.5px solid rgba(241,77,104,0.65);
+  box-shadow:0 0 0 1px rgba(241,77,104,0.08), 0 10px 28px rgba(241,77,104,0.16);
+}
+.bubble:hover{box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 14px 34px rgba(0,0,0,0.35);}
+.bubble .bubble-pair{font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:.2px; line-height:1.15; white-space:nowrap;}
+.bubble .bubble-amount{font-family:'IBM Plex Mono',monospace; font-weight:600; margin-top:3px; line-height:1.1; white-space:nowrap;}
+.bubble.win .bubble-amount{color:#DFF7EC;}
+.bubble.loss .bubble-amount{color:#FCE2E7;}
+.bubble.win .bubble-pair{color:#DFF7EC;}
+.bubble.loss .bubble-pair{color:#FCE2E7;}
+.bubble-legend{display:flex; gap:18px; margin-top:12px; flex-wrap:wrap;}
+.bubble-legend span{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim);}
+.bubble-legend i{width:10px; height:10px; border-radius:50%; display:inline-block;}
+.bubble-legend i.win{background:var(--green);}
+.bubble-legend i.loss{background:var(--red);}
+
 /* tables */
 table{width:100%; border-collapse:collapse; font-size:13px;}
 thead th{
@@ -543,6 +581,20 @@ tbody tr:hover .row-actions{opacity:1;}
       <div class="panel">
         <div class="panel-head"><div class="panel-title">Drawdown</div></div>
         <div class="chart-wrap"><canvas id="chart-drawdown"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">Top vincite e perdite</div>
+          <div class="panel-title-sub">Le operazioni chiuse più rilevanti — trascina le bolle con il mouse</div>
+        </div>
+      </div>
+      <div class="bubble-stage" id="bubble-stage"></div>
+      <div class="bubble-legend">
+        <span><i class="win"></i> Vincita</span>
+        <span><i class="loss"></i> Perdita</span>
       </div>
     </div>
 
