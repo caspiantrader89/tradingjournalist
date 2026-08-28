@@ -76,11 +76,16 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-password').value;
+  const rememberMe = document.getElementById('remember-me').checked;
   const errBox = document.getElementById('login-error');
   errBox.textContent = '';
   if (!email || !pass) { errBox.textContent = 'Inserisci email e password.'; return; }
   setLoginBusy(true);
   try {
+    const persistence = rememberMe
+      ? firebase.auth.Auth.Persistence.LOCAL
+      : firebase.auth.Auth.Persistence.SESSION;
+    await auth.setPersistence(persistence);
     await auth.signInWithEmailAndPassword(email, pass);
   } catch (err) {
     errBox.textContent = translateAuthError(err);
