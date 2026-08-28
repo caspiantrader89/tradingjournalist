@@ -1186,12 +1186,51 @@ function guessMapping(header) {
 // S/L | T/P | Ora chiusura | Prezzo chiusura | Commissioni | Swap | Profitto
 const MT_POSITIONS_COLUMN_MAP = [
   'openDate', '', 'instrument', 'direction', 'lots', 'entryPrice',
-  'slPrice', 'tpPrice', 'closeDate', 'exitPrice', '', '', 'profit',
+  'slPrice', 'tpPrice', 'closeDate', 'exitPrice', '', '', 'profit', 'initialCapital',
 ];
 const MT_POSITIONS_HEADER_LABELS = [
   'Apertura', 'Posizione', 'Simbolo', 'Tipo', 'Volume', 'Prezzo apertura',
   'S/L', 'T/P', 'Chiusura', 'Prezzo chiusura', 'Commissioni', 'Swap', 'Profitto',
+  'Saldo conto (dal file)',
 ];
+
+// Legge il saldo del conto dalla sezione "Affari" del report MetaTrader/FTMO,
+// che elenca ogni movimento (trade e depositi/prelievi "balance") con il
+// saldo PROGRESSIVO dopo ciascuno ("Bilancio"). Calcoliamo il saldo subito
+// PRIMA della prima riga presente nel file (saldo dopo meno l'impatto di
+// quella riga), così l'import può poi sommare trade e movimenti importati
+// e ritrovare da solo il saldo attuale — stessa logica usata per Bybit.
+// Colonne "Affari": Ora, Affare, Simbolo, Tipo, Direzione, Volume, Prezzo,
+// Ordine, Commissioni, Spese, Swap, Profitto, Bilancio, Commento.
+function extractMTInitialCapital(sheetRows) {
+  const dealsIdx = sheetRows.findIndex(r => String(r[0] || '').trim().toLowerCase() === 'affari');
+  if (dealsIdx === -1) return null;
+  const dataStart = dealsIdx + 2; // salta la riga "Affari" e la riga di intestazione
+  const num = (v) => parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.'));
+  for (let i = dataStart; i < sheetRows.length; i++) {
+    const row = sheetRows[i];
+    const firstCell = String(row[0] || '').trim().toLowerCase();
+    if (!firstCell || firstCell === 'posizioni aperte' || firstCell === 'risultati') break;
+    const balanceAfter = num(row[12]);
+    if (isNaN(balanceAfter)) continue;
+    const type = String(row[3] || '').trim().toLowerCase();
+    if (type === 'balance') {
+      // Deposito/prelievo esplicito (tipicamente il primo, es. "Initial account
+      // balance" di una challenge FTMO): il saldo DOPO questo movimento è il
+      // vero capitale di partenza del conto, non va sottratto.
+      return balanceAfter;
+    }
+    // Nessun deposito esplicito trovato: usiamo il saldo subito PRIMA di questa
+    // prima riga presente nel file (saldo dopo meno l'impatto del trade),
+    // così l'import può sommare i trade importati e ritrovare il saldo attuale.
+    const commission = num(row[8]) || 0;
+    const fee = num(row[9]) || 0;
+    const swap = num(row[10]) || 0;
+    const profit = num(row[11]) || 0;
+    return balanceAfter - commission - fee - swap - profit;
+  }
+  return null;
+}
 
 // Riconosce il report MetaTrader/FTMO cercando la riga "Posizioni" e la riga
 // di intestazione subito dopo, poi estrae le righe fino a "Ordini" (o a una
@@ -1213,6 +1252,10 @@ function extractMetaTraderPositions(sheetRows) {
     }));
   }
   if (!rows.length) return null;
+
+  const initialCapital = extractMTInitialCapital(sheetRows);
+  if (initialCapital !== null) rows[0][13] = String(initialCapital);
+
   return rows;
 }
 
