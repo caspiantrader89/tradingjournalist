@@ -2900,6 +2900,383 @@ if (accountRenameLink) accountRenameLink.addEventListener('click', (e) => { e.pr
 const accountDeleteLink = document.getElementById('account-delete-link');
 if (accountDeleteLink) accountDeleteLink.addEventListener('click', (e) => { e.preventDefault(); deleteCurrentAccount(); });
 
+/* ---------------- dashboard: personalizzazione layout (righe esplicite + colonne) ----------------
+   Il layout è un array di RIGHE, ognuna con la lista dei widget e la loro
+   larghezza in "colonne" su una griglia di DASH_COLS colonne. Avere righe
+   esplicite (invece di dedurle dal wrap del flexbox) rende affidabili sia il
+   ridimensionamento — si sa sempre con certezza chi è il vicino nella riga —
+   sia il riordino con auto-adattamento: quando un widget entra o esce da una
+   riga, le colonne dei membri di quella riga vengono ridistribuite in automatico
+   perché si adattino sempre esattamente allo spazio disponibile. ---------------- */
+
+const DASH_LAYOUT_KEY = 'tj_dashboard_layout_v2';
+const DASH_COLS = 12;
+const DASH_MIN_SPAN = 3; // ~25% minimo, evita widget illeggibili
+const DASH_MIN_HEIGHT = 160;
+const DASH_MAX_HEIGHT = 900;
+
+function dashboardWidgetEls() {
+  return Array.from(document.querySelectorAll('#dashboard-grid .dash-widget'));
+}
+
+function widthPctToSpan(pct) {
+  return Math.max(DASH_MIN_SPAN, Math.min(DASH_COLS, Math.round((pct / 100) * DASH_COLS)));
+}
+
+function dashboardDefaultLayout() {
+  // raggruppa i widget nell'ordine dell'HTML in righe, sommando gli span finché
+  // stanno in DASH_COLS: replica il comportamento "a capo" originale ma in modo esplicito
+  const rows = [];
+  let current = [];
+  let currentSum = 0;
+  dashboardWidgetEls().forEach(el => {
+    const span = widthPctToSpan(parseInt(el.dataset.defaultWidth, 10) || 50);
+    if (current.length && currentSum + span > DASH_COLS) {
+      rows.push(current);
+      current = [];
+      currentSum = 0;
+    }
+    current.push({ id: el.dataset.widgetId, span, height: parseInt(el.dataset.defaultHeight, 10) || 260 });
+    currentSum += span;
+  });
+  if (current.length) rows.push(current);
+  return rows;
+}
+
+function loadDashboardLayout() {
+  try {
+    const raw = localStorage.getItem(DASH_LAYOUT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (e) { return null; }
+}
+
+function saveDashboardLayout() {
+  const grid = document.getElementById('dashboard-grid');
+  if (!grid) return;
+  const rows = Array.from(grid.querySelectorAll('.dash-row')).map(rowEl =>
+    Array.from(rowEl.querySelectorAll('.dash-widget')).map(el => ({
+      id: el.dataset.widgetId,
+      span: parseInt(el.dataset.span, 10) || DASH_COLS,
+      height: Math.round(el.getBoundingClientRect().height) || 260,
+    }))
+  ).filter(r => r.length);
+  try { localStorage.setItem(DASH_LAYOUT_KEY, JSON.stringify(rows)); } catch (e) { /* storage pieno/non disponibile: ignora */ }
+}
+
+function setWidgetSpan(el, span) {
+  const s = Math.max(DASH_MIN_SPAN, Math.min(DASH_COLS, Math.round(span)));
+  el.dataset.span = s;
+  el.style.gridColumn = 'span ' + s;
+  return s;
+}
+
+// (Ri)costruisce il DOM della dashboard a partire dal modello a righe.
+// Sposta i widget esistenti (non li ricrea), quindi i listener già collegati
+// alle maniglie di drag/resize restano validi dopo ogni ri-render.
+function renderDashboardRows(rows) {
+  const grid = document.getElementById('dashboard-grid');
+  if (!grid) return;
+  const byId = {};
+  dashboardWidgetEls().forEach(el => { byId[el.dataset.widgetId] = el; });
+
+  const known = new Set();
+  rows.forEach(r => r.forEach(item => known.add(item.id)));
+  const extraRows = [];
+  Object.keys(byId).forEach(id => {
+    if (!known.has(id)) {
+      const el = byId[id];
+      extraRows.push([{ id, span: widthPctToSpan(parseInt(el.dataset.defaultWidth, 10) || 100), height: parseInt(el.dataset.defaultHeight, 10) || 260 }]);
+    }
+  });
+  const finalRows = rows.concat(extraRows).filter(r => r.length);
+
+  grid.innerHTML = '';
+  finalRows.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'dash-row';
+    row.forEach(item => {
+      const el = byId[item.id];
+      if (!el) return;
+      setWidgetSpan(el, item.span);
+      el.style.height = (item.height || 260) + 'px';
+      rowEl.appendChild(el);
+    });
+    if (rowEl.children.length) grid.appendChild(rowEl);
+  });
+}
+
+function dashboardRowOf(widget) {
+  return widget.closest('.dash-row');
+}
+
+// ridistribuisce in modo uniforme gli span dei widget di una riga, così che
+// riempiano sempre le DASH_COLS colonne (usato quando un widget entra/esce dalla riga)
+function redistributeRow(rowEl) {
+  if (!rowEl || !rowEl.parentNode) return;
+  const widgets = Array.from(rowEl.querySelectorAll('.dash-widget'));
+  if (!widgets.length) { rowEl.remove(); return; }
+  const base = Math.floor(DASH_COLS / widgets.length);
+  const remainder = DASH_COLS - base * widgets.length;
+  widgets.forEach((el, i) => setWidgetSpan(el, base + (i < remainder ? 1 : 0)));
+}
+
+function resizeChartIfNeeded(widgetId) {
+  if (widgetId === 'bubbles') {
+    try { renderBubbleChart(); } catch (e) { /* ignore */ }
+    return;
+  }
+  const map = { equity: 'equity', outcome: 'outcome', monthly: 'monthly', drawdown: 'drawdown', weekday: 'weekday', r50: 'r50' };
+  const key = map[widgetId];
+  if (key && CHARTS[key]) {
+    try { CHARTS[key].resize(); } catch (e) { /* ignore */ }
+  }
+}
+
+function toggleDashboardEditMode() {
+  const grid = document.getElementById('dashboard-grid');
+  if (!grid) return;
+  const editing = grid.classList.toggle('editing');
+  const label = document.getElementById('dashboard-edit-btn-label');
+  const btn = document.getElementById('btn-toggle-dashboard-edit');
+  const hint = document.getElementById('dashboard-edit-hint');
+  const resetBtn = document.getElementById('btn-reset-dashboard-layout');
+  if (label) label.textContent = editing ? 'Fine personalizzazione' : 'Personalizza dashboard';
+  if (btn) {
+    btn.classList.toggle('btn-ghost', !editing);
+    btn.classList.toggle('btn-primary', editing);
+  }
+  if (hint) hint.style.display = editing ? 'block' : 'none';
+  if (resetBtn) resetBtn.style.display = editing ? 'inline-flex' : 'none';
+}
+
+function resetDashboardLayout() {
+  if (!window.confirm('Ripristinare la disposizione predefinita della dashboard?')) return;
+  try { localStorage.removeItem(DASH_LAYOUT_KEY); } catch (e) { /* ignore */ }
+  renderDashboardRows(dashboardDefaultLayout());
+  Object.keys(CHARTS).forEach(k => { try { CHARTS[k] && CHARTS[k].resize(); } catch (e) { /* ignore */ } });
+  try { renderBubbleChart(); } catch (e) { /* ignore */ }
+  toast('Layout ripristinato.');
+}
+
+function initDashboardCustomization() {
+  const grid = document.getElementById('dashboard-grid');
+  if (!grid) return;
+
+  renderDashboardRows(loadDashboardLayout() || dashboardDefaultLayout());
+
+  const editBtn = document.getElementById('btn-toggle-dashboard-edit');
+  if (editBtn) editBtn.addEventListener('click', toggleDashboardEditMode);
+  const resetBtn = document.getElementById('btn-reset-dashboard-layout');
+  if (resetBtn) resetBtn.addEventListener('click', resetDashboardLayout);
+
+  // i listener vengono collegati una sola volta: i re-render successivi spostano
+  // gli stessi nodi DOM (non li ricreano), quindi restano validi
+  dashboardWidgetEls().forEach(el => {
+    enableWidgetDrag(el);
+    enableWidgetResize(el);
+  });
+}
+
+/* ---- trascinamento per riordinare i widget, con auto-adattamento delle colonne ---- */
+function enableWidgetDrag(widget) {
+  const handle = widget.querySelector('.dash-drag-handle');
+  if (!handle) return;
+  let placeholder = null;
+  let originRow = null;
+
+  handle.addEventListener('pointerdown', (e) => {
+    const grid = document.getElementById('dashboard-grid');
+    if (!grid || !grid.classList.contains('editing')) return;
+    e.preventDefault();
+
+    const rect = widget.getBoundingClientRect();
+    const offX = e.clientX - rect.left;
+    const offY = e.clientY - rect.top;
+
+    originRow = dashboardRowOf(widget);
+
+    placeholder = document.createElement('div');
+    placeholder.className = 'dash-widget dw-placeholder';
+    placeholder.style.gridColumn = getComputedStyle(widget).gridColumn;
+    placeholder.style.height = rect.height + 'px';
+    widget.parentNode.insertBefore(placeholder, widget);
+
+    widget.classList.add('dw-dragging');
+    widget.style.position = 'fixed';
+    widget.style.zIndex = '999';
+    widget.style.width = rect.width + 'px';
+    widget.style.height = rect.height + 'px';
+    widget.style.left = rect.left + 'px';
+    widget.style.top = rect.top + 'px';
+    widget.style.pointerEvents = 'none';
+
+    try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+
+    const onMove = (ev) => {
+      widget.style.left = (ev.clientX - offX) + 'px';
+      widget.style.top = (ev.clientY - offY) + 'px';
+
+      const rows = Array.from(grid.querySelectorAll('.dash-row'));
+      // riga sotto il puntatore (con un piccolo margine di tolleranza)
+      let hoverRow = rows.find(r => {
+        const rr = r.getBoundingClientRect();
+        return ev.clientY >= rr.top - 10 && ev.clientY <= rr.bottom + 10;
+      });
+
+      let targetRow;
+      if (hoverRow) {
+        targetRow = hoverRow;
+        if (targetRow !== placeholder.parentNode) {
+          // se la vecchia riga del placeholder resta vuota, verrà ripulita sotto
+        }
+      } else {
+        // il puntatore è nello spazio tra due righe (o sopra/sotto tutte quante):
+        // creiamo (o riusiamo) una riga vuota nella posizione giusta, per poter
+        // sganciare un widget e farlo diventare autonomo su una riga tutta sua
+        const insertBeforeRow = rows.find(r => r !== placeholder.parentNode && r.getBoundingClientRect().top > ev.clientY) || null;
+        if (placeholder.parentNode && placeholder.parentNode.classList.contains('dash-row') &&
+            placeholder.parentNode.children.length === 1) {
+          targetRow = placeholder.parentNode;
+          if (insertBeforeRow) grid.insertBefore(targetRow, insertBeforeRow);
+          else grid.appendChild(targetRow);
+        } else {
+          targetRow = document.createElement('div');
+          targetRow.className = 'dash-row';
+          if (insertBeforeRow) grid.insertBefore(targetRow, insertBeforeRow);
+          else grid.appendChild(targetRow);
+        }
+      }
+
+      const widgetsInRow = Array.from(targetRow.querySelectorAll('.dash-widget')).filter(w => w !== widget && w !== placeholder);
+      let before = null;
+      if (widgetsInRow.length) {
+        let closestW = null, closestWDist = Infinity;
+        widgetsInRow.forEach(w => {
+          const wr = w.getBoundingClientRect();
+          const cx = wr.left + wr.width / 2;
+          const dist = Math.abs(ev.clientX - cx);
+          if (dist < closestWDist) { closestWDist = dist; closestW = w; }
+        });
+        const wr = closestW.getBoundingClientRect();
+        before = ev.clientX < wr.left + wr.width / 2 ? closestW : closestW.nextSibling;
+      }
+      if (before) targetRow.insertBefore(placeholder, before);
+      else targetRow.appendChild(placeholder);
+
+      // ripulisce righe rimaste vuote diverse da quella che ospita il placeholder
+      rows.forEach(r => { if (r !== targetRow && r.parentNode && !r.querySelector('.dash-widget')) r.remove(); });
+    };
+
+    const onUp = (ev) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      try { handle.releasePointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
+
+      widget.classList.remove('dw-dragging');
+      widget.style.position = '';
+      widget.style.zIndex = '';
+      widget.style.width = '';
+      widget.style.left = '';
+      widget.style.top = '';
+      widget.style.pointerEvents = '';
+
+      const destRow = placeholder ? placeholder.parentNode : null;
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.insertBefore(widget, placeholder);
+        placeholder.remove();
+      }
+      placeholder = null;
+
+      // auto-adattamento: la riga di destinazione e quella di origine (se diversa
+      // e ancora popolata) vengono ridistribuite per riempire sempre le 12 colonne —
+      // è quello che fa "entrare" un widget accanto a un altro senza lasciare vuoti
+      if (destRow) redistributeRow(destRow);
+      if (originRow && originRow !== destRow) redistributeRow(originRow);
+
+      document.querySelectorAll('#dashboard-grid .dash-row').forEach(r => { if (!r.children.length) r.remove(); });
+
+      Object.keys(CHARTS).forEach(k => { try { CHARTS[k] && CHARTS[k].resize(); } catch (_) { /* ignore */ } });
+      try { renderBubbleChart(); } catch (_) { /* ignore */ }
+
+      saveDashboardLayout();
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
+/* ---- trascinamento per ridimensionare: larghezza a colonne "a splitter" col vicino
+   di riga — sempre noto con certezza, perché la riga è esplicita — altezza libera. ---- */
+function enableWidgetResize(widget) {
+  const handle = widget.querySelector('.dash-resize-handle');
+  if (!handle) return;
+
+  handle.addEventListener('pointerdown', (e) => {
+    const grid = document.getElementById('dashboard-grid');
+    if (!grid || !grid.classList.contains('editing')) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rowEl = dashboardRowOf(widget);
+    const rowWidgets = rowEl ? Array.from(rowEl.querySelectorAll('.dash-widget')) : [widget];
+    const idx = rowWidgets.indexOf(widget);
+    const partner = idx >= 0 && idx + 1 < rowWidgets.length ? rowWidgets[idx + 1] : null;
+
+    const rowRect = (rowEl || widget).getBoundingClientRect();
+    const colPitch = rowRect.width / DASH_COLS; // px per colonna, usato per convertire il drag del mouse
+
+    const startX = e.clientX, startY = e.clientY;
+    const startRect = widget.getBoundingClientRect();
+    const startHeight = startRect.height;
+    const startSpan = parseInt(widget.dataset.span, 10) || DASH_COLS;
+    const partnerStartSpan = partner ? (parseInt(partner.dataset.span, 10) || DASH_COLS) : null;
+
+    widget.classList.add('dw-resizing');
+    if (partner) partner.classList.add('dw-resizing');
+    try { handle.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      const spanDelta = Math.round(dx / colPitch);
+
+      let newSpan = startSpan + spanDelta;
+
+      if (partner) {
+        let newPartnerSpan = partnerStartSpan - spanDelta;
+        if (newPartnerSpan < DASH_MIN_SPAN) { newPartnerSpan = DASH_MIN_SPAN; newSpan = startSpan + (partnerStartSpan - DASH_MIN_SPAN); }
+        if (newSpan < DASH_MIN_SPAN) { newSpan = DASH_MIN_SPAN; newPartnerSpan = partnerStartSpan + (startSpan - DASH_MIN_SPAN); }
+        setWidgetSpan(partner, newPartnerSpan);
+      } else {
+        newSpan = Math.max(DASH_MIN_SPAN, Math.min(DASH_COLS, newSpan));
+      }
+      setWidgetSpan(widget, newSpan);
+
+      const newHeight = Math.min(DASH_MAX_HEIGHT, Math.max(DASH_MIN_HEIGHT, startHeight + dy));
+      widget.style.height = newHeight + 'px';
+    };
+
+    const onUp = (ev) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      try { handle.releasePointerCapture(ev.pointerId); } catch (_) { /* ignore */ }
+      widget.classList.remove('dw-resizing');
+      if (partner) partner.classList.remove('dw-resizing');
+      resizeChartIfNeeded(widget.dataset.widgetId);
+      if (partner) resizeChartIfNeeded(partner.dataset.widgetId);
+      saveDashboardLayout();
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
+initDashboardCustomization();
+
 /* ---------------- init ---------------- */
 
 async function init() {

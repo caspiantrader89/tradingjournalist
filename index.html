@@ -159,6 +159,55 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 .chart-wrap{position:relative; height:230px;}
 .chart-wrap.small{height:170px;}
 
+/* dashboard personalizzabile: griglia di widget trascinabili/ridimensionabili */
+.dash-edit-hint{
+  margin-top:14px; padding:10px 16px; border-radius:10px; font-size:12.5px;
+  color:var(--blue); background:var(--blue-dim); border:1px solid rgba(91,140,255,0.3);
+}
+.dash-grid{display:flex; flex-direction:column; gap:20px; margin-top:20px;}
+.dash-row{display:grid; grid-template-columns:repeat(12,1fr); gap:20px; align-items:start;}
+.dash-widget{
+  display:flex; flex-direction:column; position:relative;
+  grid-column:span 12; margin-bottom:0 !important;
+  min-height:160px; box-sizing:border-box; min-width:0;
+}
+@media(max-width:980px){.dash-row{grid-template-columns:1fr;} .dash-grid .dash-widget{grid-column:1 / -1 !important;}}
+
+.dash-widget .chart-wrap{flex:1 1 auto; height:auto; min-height:100px;}
+.dash-widget .table-scroll{flex:1 1 auto; min-height:0; overflow:auto;}
+.dash-widget .bubble-stage{flex:1 1 auto; height:auto; min-height:180px;}
+
+.dash-drag-handle{
+  display:none; position:absolute; top:10px; right:14px; z-index:5;
+  width:26px; height:26px; align-items:center; justify-content:center;
+  border-radius:6px; background:var(--surface-2); border:1px solid var(--border);
+  color:var(--text-dim); font-size:14px; cursor:grab; user-select:none;
+}
+.dash-drag-handle:active{cursor:grabbing;}
+.dash-resize-handle{
+  display:none; position:absolute; right:2px; bottom:2px; width:18px; height:18px;
+  cursor:nwse-resize; z-index:5;
+}
+.dash-resize-handle::after{
+  content:""; position:absolute; right:3px; bottom:3px; width:9px; height:9px;
+  border-right:2px solid var(--text-faint); border-bottom:2px solid var(--text-faint);
+  border-radius:0 0 3px 0;
+}
+
+.dash-grid.editing .dash-drag-handle,
+.dash-grid.editing .dash-resize-handle{display:flex;}
+.dash-grid.editing .dash-widget{
+  outline:1.5px dashed var(--border); outline-offset:3px; cursor:default;
+}
+.dash-grid.editing .dash-widget.dw-dragging{
+  opacity:0.35;
+}
+.dash-widget.dw-resizing{transition:none !important;}
+.dash-widget.dw-placeholder{
+  border:1.5px dashed var(--blue); background:var(--blue-dim); border-radius:var(--radius);
+}
+.dash-widget.dw-placeholder > *{visibility:hidden;}
+
 /* bubble chart — top vincite/perdite trascinabili */
 .bubble-stage{
   position:relative; height:380px; border-radius:12px; overflow:hidden;
@@ -541,10 +590,22 @@ tbody tr:hover .row-actions{opacity:1;}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15l3-3 3 3"/></svg>
         Esporta report PDF
       </button>
+      <button class="btn btn-ghost" id="btn-reset-dashboard-layout" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 21v-6h6"/></svg>
+        Ripristina layout
+      </button>
+      <button class="btn btn-ghost" id="btn-toggle-dashboard-edit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 21v-3.6L15.6 5.8a1.6 1.6 0 0 1 2.3 0l1.9 1.9a1.6 1.6 0 0 1 0 2.3L8.2 21.6H4z"/><path d="M14.2 7.4l2.4 2.4"/></svg>
+        <span id="dashboard-edit-btn-label">Personalizza dashboard</span>
+      </button>
       <button class="btn btn-primary" data-goto="trade-form">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
         Nuovo trade
       </button>
+    </div>
+
+    <div class="dash-edit-hint" id="dashboard-edit-hint" style="display:none;">
+      Modalità personalizzazione attiva — trascina <b>⠿</b> per riordinare i pannelli, trascina l'angolo <b>◢</b> in basso a destra per ridimensionarli.
     </div>
 
     <div class="stat-row" id="dash-stats"></div>
@@ -552,8 +613,10 @@ tbody tr:hover .row-actions{opacity:1;}
       ⚠️ La libreria dei grafici (Chart.js) non si è caricata, probabilmente bloccata da un ad-blocker o dagli Shields di Brave. Statistiche e tabelle funzionano comunque; per vedere anche i grafici, consenti gli script da <b>cdnjs.cloudflare.com</b> per questa pagina (o disattiva Shields/adblock) e ricarica.
     </div>
 
-    <div class="grid-2">
-      <div class="panel">
+    <div class="dash-grid" id="dashboard-grid">
+
+      <div class="panel dash-widget" data-widget-id="equity" data-default-width="50" data-default-height="360">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="hero-equity">
           <div>
             <div class="hero-label">Equity line</div>
@@ -561,86 +624,103 @@ tbody tr:hover .row-actions{opacity:1;}
           </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-equity"></canvas></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-      <div class="panel">
+
+      <div class="panel dash-widget" data-widget-id="outcome" data-default-width="50" data-default-height="360">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head"><div class="panel-title">Esito operazioni</div></div>
         <div class="chart-wrap small"><canvas id="chart-outcome"></canvas></div>
         <div id="outcome-legend" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-    </div>
 
-    <div class="grid-2">
-      <div class="panel">
+      <div class="panel dash-widget" data-widget-id="monthly" data-default-width="50" data-default-height="310">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head">
           <div>
             <div class="panel-title">P&amp;L mensile</div>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-      <div class="panel">
+
+      <div class="panel dash-widget" data-widget-id="drawdown" data-default-width="50" data-default-height="310">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head"><div class="panel-title">Drawdown</div></div>
         <div class="chart-wrap"><canvas id="chart-drawdown"></canvas></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-    </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Top vincite e perdite</div>
-          <div class="panel-title-sub">Le operazioni chiuse più rilevanti — trascina le bolle con il mouse</div>
+      <div class="panel dash-widget" data-widget-id="bubbles" data-default-width="100" data-default-height="480">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Top vincite e perdite</div>
+            <div class="panel-title-sub">Le operazioni chiuse più rilevanti — trascina le bolle con il mouse</div>
+          </div>
         </div>
-      </div>
-      <div class="bubble-stage" id="bubble-stage"></div>
-      <div class="bubble-legend">
-        <span><i class="win"></i> Vincita</span>
-        <span><i class="loss"></i> Perdita</span>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Performance per strumento</div>
-          <div class="panel-title-sub">Calcolata sulle operazioni chiuse</div>
+        <div class="bubble-stage" id="bubble-stage"></div>
+        <div class="bubble-legend">
+          <span><i class="win"></i> Vincita</span>
+          <span><i class="loss"></i> Perdita</span>
         </div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr>
-            <th>Strumento</th><th>N° op.</th><th>Win rate</th><th>Stop</th><th>Profit</th><th>BE</th><th>Rendimento</th><th>R:R medio</th>
-          </tr></thead>
-          <tbody id="tbl-per-instrument"></tbody>
-        </table>
-      </div>
-    </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <div class="panel-title">Performance per strategia</div>
-          <div class="panel-title-sub">Calcolata sulle operazioni chiuse</div>
+      <div class="panel dash-widget" data-widget-id="per-instrument" data-default-width="100" data-default-height="360">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Performance per strumento</div>
+            <div class="panel-title-sub">Calcolata sulle operazioni chiuse</div>
+          </div>
         </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th>Strumento</th><th>N° op.</th><th>Win rate</th><th>Stop</th><th>Profit</th><th>BE</th><th>Rendimento</th><th>R:R medio</th>
+            </tr></thead>
+            <tbody id="tbl-per-instrument"></tbody>
+          </table>
+        </div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th class="txt">Strategia</th><th>N° op.</th><th>Win rate</th><th>Rendimento</th><th>R:R medio</th><th>Checklist media</th></tr></thead>
-          <tbody id="tbl-per-strategy"></tbody>
-        </table>
-      </div>
-    </div>
 
-    <div class="grid-2">
-      <div class="panel">
+      <div class="panel dash-widget" data-widget-id="per-strategy" data-default-width="100" data-default-height="360">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Performance per strategia</div>
+            <div class="panel-title-sub">Calcolata sulle operazioni chiuse</div>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th class="txt">Strategia</th><th>N° op.</th><th>Win rate</th><th>Rendimento</th><th>R:R medio</th><th>Checklist media</th></tr></thead>
+            <tbody id="tbl-per-strategy"></tbody>
+          </table>
+        </div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
+      </div>
+
+      <div class="panel dash-widget" data-widget-id="weekday" data-default-width="50" data-default-height="270">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head"><div class="panel-title">Performance per giorno della settimana</div></div>
         <div class="chart-wrap small"><canvas id="chart-weekday"></canvas></div>
         <div class="days-chart-note">P&amp;L totale per giorno di chiusura dell'operazione.</div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
-      <div class="panel">
+
+      <div class="panel dash-widget" data-widget-id="r50" data-default-width="50" data-default-height="270">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head"><div class="panel-title">R:R — ultime 50 operazioni</div></div>
         <div class="chart-wrap small"><canvas id="chart-r50"></canvas></div>
         <div class="days-chart-note">Multiplo R realizzato per ciascuna delle ultime operazioni chiuse.</div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
+
     </div>
   </section>
 
