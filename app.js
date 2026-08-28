@@ -7,40 +7,63 @@
 
 const STORAGE_KEY = 'trading_journal_data';
 
+function newAccountId() { return 'acc_' + uid(); }
+
+// Elenco conti (solo metadati: id + nome) e id del conto attualmente
+// selezionato. Lo STATE globale (settings/trades/movements/...) contiene
+// sempre e solo i dati del conto corrente: il resto del file non cambia.
+let ACCOUNTS = [];
+let CURRENT_ACCOUNT_ID = null;
+
 /* Persistenza: Firestore (per-utente, richiede login) con fallback
-   locale (localStorage) usato solo se offline o non ancora loggati. */
+   locale (localStorage) usato solo se offline o non ancora loggati.
+   Il documento salvato ha la forma:
+   { currentAccountId, accounts: { [id]: { name, state } } } */
 const Storage = {
+  _wrapperCache: null,
+
   _localKey() {
     // chiave locale separata per utente, per non mischiare dati tra account
     const uid = window.firebaseUser ? window.firebaseUser.uid : 'anon';
     return STORAGE_KEY + ':' + uid;
   },
-  async load() {
+
+  async _loadWrapper() {
+    let raw = null;
     if (window.firebaseUser && typeof db !== 'undefined') {
       try {
         const snap = await db.collection('journals').doc(window.firebaseUser.uid).get();
-        if (snap.exists && snap.data().state) {
-          return snap.data().state;
-        }
-        return null;
+        if (snap.exists) raw = snap.data();
       } catch (e) {
         console.warn('Firestore load failed, uso copia locale', e);
         toast('Cloud non raggiungibile, uso i dati salvati localmente', true);
       }
     }
-    try {
-      const raw = localStorage.getItem(this._localKey());
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
-  },
-  async save(data) {
-    // sempre una copia locale di sicurezza, per non perdere dati se offline
-    try { localStorage.setItem(this._localKey(), JSON.stringify(data)); } catch (e) { /* ignore */ }
+    if (!raw) {
+      try {
+        const local = localStorage.getItem(this._localKey());
+        raw = local ? JSON.parse(local) : null;
+      } catch (e) { raw = null; }
+    }
+    if (!raw) return null;
 
+    if (raw.accounts && raw.currentAccountId) return raw; // già multi-conto
+    if (raw.state) {
+      // formato precedente (mono-conto): lo incapsuliamo in un unico conto,
+      // così i dati esistenti non vengono persi passando al multi-conto.
+      const id = newAccountId();
+      return { currentAccountId: id, accounts: { [id]: { name: 'Conto principale', state: raw.state } } };
+    }
+    return null;
+  },
+
+  async _saveWrapper(wrapper) {
+    try { localStorage.setItem(this._localKey(), JSON.stringify(wrapper)); } catch (e) { /* ignore */ }
     if (window.firebaseUser && typeof db !== 'undefined') {
       try {
         await db.collection('journals').doc(window.firebaseUser.uid).set({
-          state: data,
+          currentAccountId: wrapper.currentAccountId,
+          accounts: wrapper.accounts,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         return true;
@@ -51,6 +74,37 @@ const Storage = {
       }
     }
     return true;
+  },
+
+  // Carica il conto attualmente selezionato (o il primo disponibile) e
+  // popola ACCOUNTS/CURRENT_ACCOUNT_ID. Ritorna lo STATE di quel conto,
+  // esattamente come faceva la vecchia load() mono-conto.
+  async load() {
+    const wrapper = await this._loadWrapper();
+    if (!wrapper || !wrapper.accounts || !Object.keys(wrapper.accounts).length) return null;
+    this._wrapperCache = wrapper;
+    ACCOUNTS = Object.keys(wrapper.accounts).map(id => ({ id, name: wrapper.accounts[id].name || 'Conto' }));
+    CURRENT_ACCOUNT_ID = (wrapper.currentAccountId && wrapper.accounts[wrapper.currentAccountId])
+      ? wrapper.currentAccountId
+      : ACCOUNTS[0].id;
+    return wrapper.accounts[CURRENT_ACCOUNT_ID].state || null;
+  },
+
+  // Salva i dati passati come STATE del conto attualmente selezionato,
+  // dentro il wrapper multi-conto (mantiene intatti gli altri conti).
+  async save(data) {
+    if (!this._wrapperCache) {
+      const id = CURRENT_ACCOUNT_ID || newAccountId();
+      CURRENT_ACCOUNT_ID = id;
+      this._wrapperCache = { currentAccountId: id, accounts: {} };
+    }
+    this._wrapperCache.currentAccountId = CURRENT_ACCOUNT_ID;
+    const existing = this._wrapperCache.accounts[CURRENT_ACCOUNT_ID];
+    this._wrapperCache.accounts[CURRENT_ACCOUNT_ID] = {
+      name: (existing && existing.name) || 'Conto principale',
+      state: data,
+    };
+    return this._saveWrapper(this._wrapperCache);
   }
 };
 
@@ -2404,12 +2458,12 @@ document.getElementById('btn-delete-all-trades').addEventListener('click', () =>
 });
 document.getElementById('btn-export-aperte-pdf').addEventListener('click', exportApertePdf);
 
-/* ---------------- init ---------------- */
+/* ---------------- multi-conto ---------------- */
 
-async function init() {
-  const loaded = await Storage.load();
-  STATE = loaded || defaultState();
-  // backfill any missing settings/fields (forward-compat with earlier versions)
+// Backfill/normalizzazione dei campi dello STATE corrente (forward-compat
+// con versioni precedenti dei dati salvati). Riusata sia in init() sia
+// ogni volta che si cambia conto o se ne crea uno nuovo.
+function normalizeState() {
   STATE.settings = { ...defaultState().settings, ...STATE.settings };
   if (!STATE.instruments || !STATE.instruments.length) STATE.instruments = defaultInstruments();
   if (!STATE.strategies) STATE.strategies = [];
@@ -2424,6 +2478,25 @@ async function init() {
   if (missing.length) {
     STATE.instruments = STATE.instruments.concat(missing);
   }
+  return missing.length > 0;
+}
+
+function renderAccountSwitcher() {
+  const sel = document.getElementById('account-switcher');
+  if (!sel) return;
+  sel.innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.name.replace(/</g, '&lt;')}</option>`).join('');
+  sel.value = CURRENT_ACCOUNT_ID;
+}
+
+async function switchAccount(id) {
+  if (!id || id === CURRENT_ACCOUNT_ID || !Storage._wrapperCache) return;
+  // salva il conto corrente prima di passare al successivo
+  await Storage.save(STATE);
+
+  CURRENT_ACCOUNT_ID = id;
+  const acc = Storage._wrapperCache.accounts[id];
+  STATE = (acc && acc.state) || defaultState();
+  normalizeState();
 
   populateInstrumentSelects();
   populateStrategyDatalist();
@@ -2431,8 +2504,119 @@ async function init() {
   renderDashboard();
   renderCsvRepairBox();
   document.getElementById('badge-open').textContent = String(openTrades().length);
+  renderAccountSwitcher();
+  showView('dashboard');
+  await Storage.save(STATE);
+}
 
-  if (!loaded || missing.length) {
+async function createAccount() {
+  const name = window.prompt('Nome del nuovo conto (es. "Bybit futures", "MT5 demo"):', '');
+  if (name === null) return; // annullato
+  const finalName = name.trim() || `Conto ${ACCOUNTS.length + 1}`;
+
+  const id = newAccountId();
+  if (!Storage._wrapperCache) Storage._wrapperCache = { currentAccountId: CURRENT_ACCOUNT_ID, accounts: {} };
+  Storage._wrapperCache.accounts[id] = { name: finalName, state: defaultState() };
+  ACCOUNTS.push({ id, name: finalName });
+
+  CURRENT_ACCOUNT_ID = id;
+  STATE = defaultState();
+  normalizeState();
+
+  populateInstrumentSelects();
+  populateStrategyDatalist();
+  resetTradeForm();
+  renderDashboard();
+  renderCsvRepairBox();
+  document.getElementById('badge-open').textContent = String(openTrades().length);
+  renderAccountSwitcher();
+  showView('dashboard');
+  await Storage.save(STATE);
+  toast('Conto "' + finalName + '" creato.');
+}
+
+async function renameCurrentAccount() {
+  const acc = ACCOUNTS.find(a => a.id === CURRENT_ACCOUNT_ID);
+  if (!acc) return;
+  const name = window.prompt('Nuovo nome per questo conto:', acc.name);
+  if (name === null) return;
+  const finalName = name.trim();
+  if (!finalName) return;
+
+  acc.name = finalName;
+  if (Storage._wrapperCache && Storage._wrapperCache.accounts[CURRENT_ACCOUNT_ID]) {
+    Storage._wrapperCache.accounts[CURRENT_ACCOUNT_ID].name = finalName;
+  }
+  await Storage._saveWrapper(Storage._wrapperCache);
+  renderAccountSwitcher();
+  toast('Conto rinominato.');
+}
+
+async function deleteCurrentAccount() {
+  if (ACCOUNTS.length <= 1) {
+    toast('Non puoi eliminare l\'unico conto rimasto.', true);
+    return;
+  }
+  const acc = ACCOUNTS.find(a => a.id === CURRENT_ACCOUNT_ID);
+  if (!acc) return;
+  const first = window.confirm('Eliminare definitivamente il conto "' + acc.name + '" e tutti i suoi dati (trade, strategie, ecc.)? Questa azione non è reversibile.');
+  if (!first) return;
+
+  const idToDelete = CURRENT_ACCOUNT_ID;
+  ACCOUNTS = ACCOUNTS.filter(a => a.id !== idToDelete);
+  if (Storage._wrapperCache) delete Storage._wrapperCache.accounts[idToDelete];
+
+  const nextId = ACCOUNTS[0].id;
+  CURRENT_ACCOUNT_ID = nextId;
+  const acc2 = Storage._wrapperCache && Storage._wrapperCache.accounts[nextId];
+  STATE = (acc2 && acc2.state) || defaultState();
+  normalizeState();
+
+  if (Storage._wrapperCache) Storage._wrapperCache.currentAccountId = nextId;
+  await Storage._saveWrapper(Storage._wrapperCache);
+
+  populateInstrumentSelects();
+  populateStrategyDatalist();
+  resetTradeForm();
+  renderDashboard();
+  renderCsvRepairBox();
+  document.getElementById('badge-open').textContent = String(openTrades().length);
+  renderAccountSwitcher();
+  showView('dashboard');
+  toast('Conto eliminato.');
+}
+
+const accountSwitcherEl = document.getElementById('account-switcher');
+if (accountSwitcherEl) accountSwitcherEl.addEventListener('change', (e) => switchAccount(e.target.value));
+const accountNewLink = document.getElementById('account-new-link');
+if (accountNewLink) accountNewLink.addEventListener('click', (e) => { e.preventDefault(); createAccount(); });
+const accountRenameLink = document.getElementById('account-rename-link');
+if (accountRenameLink) accountRenameLink.addEventListener('click', (e) => { e.preventDefault(); renameCurrentAccount(); });
+const accountDeleteLink = document.getElementById('account-delete-link');
+if (accountDeleteLink) accountDeleteLink.addEventListener('click', (e) => { e.preventDefault(); deleteCurrentAccount(); });
+
+/* ---------------- init ---------------- */
+
+async function init() {
+  const loaded = await Storage.load();
+  STATE = loaded || defaultState();
+  if (!ACCOUNTS.length) {
+    // nessun conto trovato (nuovo utente): ne creiamo uno di default
+    CURRENT_ACCOUNT_ID = newAccountId();
+    ACCOUNTS = [{ id: CURRENT_ACCOUNT_ID, name: 'Conto principale' }];
+    Storage._wrapperCache = { currentAccountId: CURRENT_ACCOUNT_ID, accounts: { [CURRENT_ACCOUNT_ID]: { name: 'Conto principale', state: STATE } } };
+  }
+  const missing = normalizeState();
+
+  populateInstrumentSelects();
+  populateStrategyDatalist();
+  resetTradeForm();
+  renderDashboard();
+  renderCsvRepairBox();
+  document.getElementById('badge-open').textContent = String(openTrades().length);
+  renderAccountSwitcher();
+
+  if (!loaded || missing) {
     await Storage.save(STATE);
   }
 }

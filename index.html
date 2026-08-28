@@ -133,9 +133,14 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 .stat-card{
   background:var(--surface); border:1px solid var(--border-soft);
   border-radius:var(--radius); padding:15px 17px;
+  min-width:0; /* permette alla card (grid item) di restringersi sotto la larghezza del contenuto */
+  overflow:hidden;
 }
 .stat-label{font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.6px; font-weight:600; margin-bottom:9px;}
-.stat-value{font-family:'IBM Plex Mono'; font-size:21px; font-weight:600; letter-spacing:-0.3px;}
+.stat-value{
+  font-family:'IBM Plex Mono'; font-size:21px; font-weight:600; letter-spacing:-0.3px;
+  overflow-wrap:anywhere; word-break:break-word; /* evita che "numero + valuta" (spazio non interrompibile) esca dalla card */
+}
 .stat-delta{font-size:11.5px; margin-top:5px; font-family:'IBM Plex Mono'; font-weight:500;}
 .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--text-dim);}
 
@@ -323,7 +328,7 @@ tbody tr:hover .row-actions{opacity:1;}
 .pr-kpi-row{ display:flex; gap:10px; margin-bottom:22px; flex-wrap:wrap; }
 .pr-kpi{ flex:1; min-width:130px; border:1px solid #D8DCE2; border-radius:8px; padding:10px 12px; }
 .pr-kpi-label{ font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:#777; font-weight:600; margin-bottom:5px; }
-.pr-kpi-value{ font-family:'IBM Plex Mono'; font-size:16px; font-weight:600; color:#111318; }
+.pr-kpi-value{ font-family:'IBM Plex Mono'; font-size:16px; font-weight:600; color:#111318; overflow-wrap:anywhere; word-break:break-word; }
 .pr-kpi-value.pos{ color:#0E9A63; } .pr-kpi-value.neg{ color:#D62E4E; }
 .pr-section-title{ font-family:'Space Grotesk'; font-size:13.5px; font-weight:600; margin:22px 0 10px; color:#111318; }
 .pr-chart-img{ width:100%; max-height:220px; object-fit:contain; border:1px solid #D8DCE2; border-radius:8px; margin-bottom:6px; background:#fff; }
@@ -462,6 +467,14 @@ tbody tr:hover .row-actions{opacity:1;}
     </button>
   </nav>
   <div class="sidebar-foot">
+    <div style="margin-bottom:10px;">
+      <select id="account-switcher" style="width:100%; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:12px; cursor:pointer;"></select>
+      <div style="margin-top:5px; font-size:10.5px; line-height:1.8;">
+        <a href="#" id="account-new-link" style="color:var(--text-dim);">+ Nuovo conto</a>
+        &nbsp;·&nbsp;<a href="#" id="account-rename-link" style="color:var(--text-dim);">Rinomina</a>
+        &nbsp;·&nbsp;<a href="#" id="account-delete-link" style="color:var(--text-dim);">Elimina</a>
+      </div>
+    </div>
     Capitale: <b class="mono" id="sidebar-capital">—</b><br>
     <span id="user-email-label" style="color:var(--text-dim);"></span>
     &nbsp;·&nbsp;<a href="#" id="logout-btn" style="color:var(--text-dim); text-decoration:underline;">Esci</a><br>
