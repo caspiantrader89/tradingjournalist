@@ -323,7 +323,7 @@
     c.fillStyle = COLORS.textFaint;
 
     c.textAlign = 'left';
-    c.fillText('tradejournalist.it', padX, y);
+    c.fillText('tradejournalist.pro', padX, y);
 
     const dateStr = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
     c.textAlign = 'right';
