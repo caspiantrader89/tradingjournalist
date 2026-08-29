@@ -35,9 +35,22 @@
   // 3) Rilevamento apertura DevTools via trucco di timing sul debugger
   //    Se i devtools sono aperti, l'esecuzione di "debugger" viene
   //    rallentata in modo misurabile: sfruttiamo questo per rilevarli.
+  //
+  //    NB: questi due controlli (timing + dimensioni finestra) sono
+  //    euristiche pensate per desktop e su mobile danno FALSI POSITIVI:
+  //    - su smartphone, l'apertura/chiusura della barra indirizzi o
+  //      della tastiera cambia innerHeight ma non outerHeight, quindi
+  //      il controllo sulle dimensioni scatta da solo;
+  //    - sotto carico o quando il telefono si scalda, il motore JS
+  //      mobile può rallentare l'esecuzione di "debugger" oltre soglia
+  //      senza che nessun devtools sia aperto (per aprirli su mobile
+  //      serve comunque il debug remoto via cavo da un computer).
+  //    Per questo li attiviamo solo su dispositivi non touch.
   function redirectAway() {
     window.location.replace('https://www.google.com');
   }
+
+  var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
   var devtoolsOpen = false;
 
@@ -69,8 +82,10 @@
     }
   }
 
-  setInterval(function () {
-    checkDevTools();
-    checkWindowSize();
-  }, 1000);
+  if (!isTouchDevice) {
+    setInterval(function () {
+      checkDevTools();
+      checkWindowSize();
+    }, 1000);
+  }
 })();
