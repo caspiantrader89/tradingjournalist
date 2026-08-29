@@ -437,9 +437,19 @@ img, canvas, svg{max-width:100%;}
   body{flex-direction:column !important;}
   .sidebar{
     width:100% !important; height:auto !important; position:relative !important;
-    flex-direction:row !important; overflow-x:auto !important; top:auto !important;
+    flex-direction:column !important; overflow-x:visible !important; top:auto !important;
   }
-  .nav{flex-direction:row !important;}
+  .nav{
+    flex:0 0 auto !important;
+    flex-direction:row !important;
+    overflow-x:auto !important;
+    align-items:center !important;
+  }
+  .nav-item{
+    width:auto !important;
+    flex:0 0 auto !important;
+    white-space:nowrap !important;
+  }
   .nav-section-label{display:none !important;}
   .main{padding:18px !important; width:100% !important; max-width:100% !important;}
 }
