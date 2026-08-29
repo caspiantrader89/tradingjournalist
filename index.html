@@ -575,6 +575,10 @@ tbody tr:hover .row-actions{opacity:1;}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15l3-3 3 3"/></svg>
         Esporta report PDF
       </button>
+      <button class="btn btn-ghost" id="btn-share-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.4-4.1M8.3 13.3l7.4 4.1"/></svg>
+        Condividi risultati
+      </button>
       <button class="btn btn-ghost" id="btn-reset-dashboard-layout" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12a9 9 0 1 1 3 6.7"/><path d="M3 21v-6h6"/></svg>
         Ripristina layout
@@ -1193,6 +1197,38 @@ tbody tr:hover .row-actions{opacity:1;}
   </div>
 </div>
 
+<div class="modal-backdrop" id="share-card-backdrop">
+  <div class="modal" id="share-card-modal" style="max-width:400px;">
+    <h3>Condividi risultati</h3>
+    <p>Genera un'immagine con le tue prestazioni, pronta da condividere.</p>
+
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button type="button" class="btn btn-ghost" id="share-format-square" style="flex:1; justify-content:center;">Quadrato</button>
+      <button type="button" class="btn btn-ghost" id="share-format-vertical" style="flex:1; justify-content:center;">Verticale</button>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button type="button" class="btn btn-ghost" id="share-bg-upload-btn" style="flex:1; justify-content:center;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="15" height="15"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Carica sfondo
+      </button>
+      <button type="button" class="btn btn-ghost" id="share-bg-reset-btn" style="flex:1; justify-content:center; display:none;">Rimuovi sfondo</button>
+      <input type="file" id="share-bg-input" accept="image/*" style="display:none;">
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:center; background:var(--bg-elevated); border:1px solid var(--border-soft); border-radius:10px; padding:12px; margin-bottom:14px;">
+      <canvas id="share-card-canvas" style="width:100%; max-width:280px; height:auto; border-radius:8px; display:block;"></canvas>
+    </div>
+
+    <div id="share-card-msg" style="min-height:16px; font-size:12px; color:var(--text-dim); margin-bottom:6px; text-align:center;"></div>
+
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button type="button" class="btn btn-ghost" id="close-share-card-btn">Chiudi</button>
+      <button type="button" class="btn btn-primary" id="download-share-card-btn">Scarica PNG</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- /#app-shell -->
 
 <div id="print-area"></div>
@@ -1204,5 +1240,6 @@ tbody tr:hover .row-actions{opacity:1;}
 <script src="cookie-consent.js"></script>
 <script src="auth.js"></script>
 <script src="app.js"></script>
+<script src="share-card.js"></script>
 </body>
 </html>
