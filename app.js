@@ -1742,6 +1742,273 @@ function extractBybitAssetChanges(sheetRows) {
   return outRows;
 }
 
+// Colonne del report "Futures Trade History" esportato da MEXC (.xlsx). Come
+// per Bybit, ogni riga è un singolo fill (esecuzione parziale), NON un trade
+// già aggregato. A differenza di Bybit, però, MEXC non fornisce una colonna
+// con la size netta della posizione dopo ogni fill, né un saldo conto: quindi
+// la ricostruzione dei cicli apertura/chiusura la facciamo con un accumulatore
+// nostro per ogni coppia simbolo+lato (long/short), che si considera "chiuso"
+// quando la quantità aperta e quella chiusa (sommate progressivamente) si
+// eguagliano. Limite noto: se l'export inizia a metà di una posizione già
+// aperta prima della finestra esportata, il primo ciclo su quel simbolo/lato
+// avrà un prezzo di entrata calcolato solo sui fill presenti nel file.
+//
+// Per distinguere fill di apertura da fill di chiusura NON ci basiamo sul
+// testo di "Direction" (es. "sell short"/"buy short": la convenzione MEXC per
+// il lato short non è quella intuitiva "vendi per aprire, compri per
+// chiudere"), ma sulla colonna "Closing PNL": è sempre esattamente 0 su un
+// fill che aumenta la posizione (matematicamente non si può realizzare PnL
+// aumentando un'esposizione) ed è diversa da zero su un fill che la riduce.
+// Verificato numericamente sul file di esempio: Closing PNL coincide con il
+// solo PnL da movimento prezzo, le fee NON sono incluse e vanno sottratte a
+// parte (colonna "Trading Fee").
+const MEXC_EXPECTED_HEADERS_FIXED = {
+  0: 'uid', 2: 'futures trading pair', 3: 'direction', 4: 'order type',
+  5: 'filled qty (cont.)', 6: 'filled qty (crypto)', 7: 'filled qty (amount)',
+  8: 'filled price', 9: 'trading fee', 10: 'fee-payment crypto', 11: 'role', 12: 'closing pnl',
+};
+const MEXC_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'lots', 'entryPrice', 'exitPrice', 'profit', 'notes', 'initialCapital'];
+const MEXC_HEADER_LABELS = [
+  'Apertura', 'Chiusura', 'Simbolo', 'Direzione', 'Quantità',
+  'Prezzo entrata (medio)', 'Prezzo uscita (medio)', 'Profitto netto (USDT)', 'Note',
+  'Saldo conto (dal file)',
+];
+
+function extractMexcFuturesFills(sheetRows) {
+  if (!sheetRows.length) return null;
+  const header = sheetRows[0].map(h => String(h || '').trim().toLowerCase());
+  const matches = Object.entries(MEXC_EXPECTED_HEADERS_FIXED).every(([idx, val]) => header[idx] === val);
+  // la colonna 1 è "Time(UTC+XX:00)": il fuso varia col fuso orario
+  // dell'account MEXC dell'utente, quindi controlliamo solo il prefisso.
+  if (!matches || !header[1] || !header[1].startsWith('time(')) return null;
+
+  const num = (v) => parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.')) || 0;
+
+  const raw = sheetRows.slice(1)
+    .filter(r => r.length && String(r[1] || '').trim())
+    .map(r => ({
+      time: String(r[1] || '').trim(),
+      pair: String(r[2] || '').trim(),
+      direction: String(r[3] || '').trim().toLowerCase(),
+      qty: num(r[6]), // Filled Qty (Crypto)
+      price: num(r[8]),
+      fee: num(r[9]),
+      pnl: num(r[12]), // Closing PNL
+    }))
+    .filter(r => r.pair && r.time && r.qty > 0);
+
+  if (!raw.length) return null;
+
+  // Il file è esportato dal più recente al più vecchio: lo ordiniamo in modo
+  // crescente. Il formato data "YYYY-MM-DD HH:MM:SS" si ordina correttamente
+  // anche come semplice confronto tra stringhe.
+  raw.sort((a, b) => a.time.localeCompare(b.time));
+
+  const fresh = () => ({
+    openQty: 0, openNotional: 0, closeQty: 0, closeNotional: 0,
+    realized: 0, fees: 0, openTime: null, closeTime: null, started: false,
+  });
+
+  const positions = {}; // "simbolo|lato" -> accumulatore del ciclo in corso
+  const outRows = [];
+
+  raw.forEach(r => {
+    const side = r.direction.includes('long') ? 'long' : (r.direction.includes('short') ? 'short' : null);
+    if (!side) return;
+    const key = r.pair + '|' + side;
+    if (!positions[key]) positions[key] = fresh();
+    const pos = positions[key];
+
+    if (!pos.started) { pos.started = true; pos.openTime = r.time; }
+    pos.fees += r.fee;
+    pos.closeTime = r.time;
+
+    const isClose = Math.abs(r.pnl) > 1e-9;
+    if (!isClose) {
+      pos.openQty += r.qty;
+      pos.openNotional += r.qty * r.price;
+    } else {
+      pos.closeQty += r.qty;
+      pos.closeNotional += r.qty * r.price;
+      pos.realized += r.pnl;
+    }
+
+    // Ciclo completo quando la quantità aperta e quella chiusa (accumulate da
+    // noi) coincidono, con una tolleranza relativa alla size della posizione
+    // (una tolleranza fissa assoluta romperebbe i simboli con quantità enormi,
+    // es. VET con centinaia di migliaia di unità).
+    const net = pos.openQty - pos.closeQty;
+    const threshold = Math.max(1e-8, pos.openQty * 1e-6);
+    if (pos.openQty > 0 && pos.closeQty > 0 && Math.abs(net) < threshold) {
+      const entryPrice = pos.openNotional / pos.openQty;
+      const exitPrice = pos.closeNotional / pos.closeQty;
+      const netProfit = pos.realized - pos.fees;
+      outRows.push([
+        pos.openTime,
+        pos.closeTime,
+        r.pair,
+        side === 'long' ? 'LONG' : 'SHORT',
+        String(pos.closeQty),
+        String(entryPrice),
+        String(exitPrice),
+        String(netProfit),
+        `Import MEXC Futures · PnL lordo ${pos.realized.toFixed(4)} USDT · fee totali ${pos.fees.toFixed(4)} USDT`,
+        '',
+      ]);
+      positions[key] = fresh();
+    }
+  });
+
+  if (!outRows.length) return null;
+  return outRows;
+}
+
+// Colonne del report "USD⨯M Perpetual Futures" esportato da BingX (.csv).
+// Come MEXC, ogni riga è un singolo fill e non c'è una colonna con la size
+// netta della posizione: usiamo lo stesso accumulatore per simbolo+lato visto
+// sopra. A differenza di MEXC, però, qui la colonna "Type" indica già
+// esplicitamente "Open Long/Short" o "Close Long/Short" senza ambiguità, quindi
+// non serve dedurre apertura/chiusura dal PnL.
+// Verificato numericamente sul file di esempio: il prezzo che fa tornare
+// "Realized PNL" è "AvgPrice", NON "DealPrice" (che può differire leggermente
+// per via di più fill sullo stesso ordine); le fee sono riportate già negative
+// e NON sono incluse nel PnL realizzato, vanno sommate a parte.
+const BINGX_EXPECTED_HEADERS_FIXED = {
+  0: 'uid', 1: 'order no.', 3: 'pair', 4: 'type', 5: 'leverage',
+  6: 'dealprice', 7: 'quantity', 8: 'amount', 9: 'fee', 10: 'fee coin',
+  11: 'realized pnl', 12: 'quote asset', 13: 'order type', 14: 'avgprice',
+};
+const BINGX_COLUMN_MAP = ['openDate', 'closeDate', 'instrument', 'direction', 'lots', 'entryPrice', 'exitPrice', 'profit', 'notes', 'initialCapital'];
+const BINGX_HEADER_LABELS = [
+  'Apertura', 'Chiusura', 'Simbolo', 'Direzione', 'Quantità',
+  'Prezzo entrata (medio)', 'Prezzo uscita (medio)', 'Profitto netto (USDT)', 'Note',
+  'Saldo conto (dal file)',
+];
+
+function extractBingxFuturesFills(sheetRows) {
+  if (!sheetRows.length) return null;
+  const header = sheetRows[0].map((h, i) => {
+    // BingX mette un BOM UTF-8 davanti alla prima intestazione ("UID"):
+    // va rimosso, altrimenti il confronto con 'uid' fallisce sempre.
+    let v = String(h || '').trim();
+    if (i === 0) v = v.replace(/^\uFEFF/, '');
+    return v.toLowerCase();
+  });
+  const matches = Object.entries(BINGX_EXPECTED_HEADERS_FIXED).every(([idx, val]) => header[idx] === val);
+  // la colonna 2 è "Time(UTC+X)": il fuso varia col fuso orario dell'account
+  // BingX dell'utente, quindi controlliamo solo il prefisso.
+  if (!matches || !header[2] || !header[2].startsWith('time(')) return null;
+
+  const num = (v) => parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.')) || 0;
+
+  const raw = sheetRows.slice(1)
+    .filter(r => r.length && String(r[2] || '').trim())
+    .map(r => ({
+      time: String(r[2] || '').trim(),
+      pair: String(r[3] || '').trim().replace(/-/g, ''), // "BTC-USDT" -> "BTCUSDT", coerente con gli altri import
+      type: String(r[4] || '').trim().toLowerCase(),
+      qty: num(r[7]),
+      avgPrice: num(r[14]),
+      fee: num(r[9]),
+      pnl: num(r[11]),
+    }))
+    .filter(r => r.pair && r.time && r.qty > 0 && (r.type.startsWith('open') || r.type.startsWith('close')));
+  // Righe con "Type" diverso da Open/Close (es. liquidazioni con dicitura
+  // particolare, eventi di funding) vengono ignorate invece di rompere
+  // l'import: restano fuori dal diario, meglio che generare trade sbagliati.
+
+  if (!raw.length) return null;
+
+  // Il file BingX è esportato dal più recente al più vecchio: lo ordiniamo in
+  // modo crescente. Formato data "YYYY-MM-DD HH:MM:SS": si ordina bene anche
+  // come confronto tra stringhe.
+  raw.sort((a, b) => a.time.localeCompare(b.time));
+
+  const fresh = () => ({
+    openQty: 0, openNotional: 0, closeQty: 0, closeNotional: 0,
+    realized: 0, fees: 0, openTime: null, closeTime: null, started: false,
+  });
+
+  const positions = {}; // "simbolo|lato" -> accumulatore del ciclo in corso
+  const outRows = [];
+
+  raw.forEach(r => {
+    const side = r.type.includes('long') ? 'long' : (r.type.includes('short') ? 'short' : null);
+    if (!side) return;
+    const key = r.pair + '|' + side;
+    if (!positions[key]) positions[key] = fresh();
+    const pos = positions[key];
+
+    if (!pos.started) { pos.started = true; pos.openTime = r.time; }
+    pos.fees += r.fee; // già negative nel file BingX
+    pos.closeTime = r.time;
+
+    if (r.type.startsWith('open')) {
+      pos.openQty += r.qty;
+      pos.openNotional += r.qty * r.avgPrice;
+    } else {
+      pos.closeQty += r.qty;
+      pos.closeNotional += r.qty * r.avgPrice;
+      pos.realized += r.pnl;
+    }
+
+    const net = pos.openQty - pos.closeQty;
+    const threshold = Math.max(1e-8, pos.openQty * 1e-6);
+    if (pos.openQty > 0 && pos.closeQty > 0 && Math.abs(net) < threshold) {
+      const entryPrice = pos.openNotional / pos.openQty;
+      const exitPrice = pos.closeNotional / pos.closeQty;
+      const netProfit = pos.realized + pos.fees; // fee già negative: si sommano
+      outRows.push([
+        pos.openTime,
+        pos.closeTime,
+        r.pair,
+        side === 'long' ? 'LONG' : 'SHORT',
+        String(pos.closeQty),
+        String(entryPrice),
+        String(exitPrice),
+        String(netProfit),
+        `Import BingX Futures · PnL lordo ${pos.realized.toFixed(4)} USDT · fee totali ${Math.abs(pos.fees).toFixed(4)} USDT`,
+        '',
+      ]);
+      positions[key] = fresh();
+    }
+  });
+
+  // Chiusure "orfane": l'export BingX può coprire solo una finestra di date
+  // limitata, quindi alcune Close possono non avere nessuna Open corrispondente
+  // nel file (la posizione era stata aperta prima dell'inizio dell'export).
+  // Le riconosciamo perché openQty è rimasto a 0: scartarle del tutto
+  // butterebbe via un PnL realmente realizzato, quindi le recuperiamo comunque,
+  // usando la data di chiusura anche come data di apertura (stima, dichiarata
+  // in nota) e il prezzo di uscita come prezzo di entrata segnaposto — il
+  // profitto netto resta quello reale letto dal file, solo il prezzo di
+  // ingresso è una stima. Le posizioni con openQty>0 ma non ancora bilanciate
+  // (net ≠ 0) restano invece escluse: sono probabilmente ancora aperte oggi.
+  Object.entries(positions).forEach(([key, pos]) => {
+    if (pos.openQty === 0 && pos.closeQty > 0) {
+      const side = key.split('|')[1];
+      const pair = key.slice(0, key.length - side.length - 1);
+      const exitPrice = pos.closeNotional / pos.closeQty;
+      const netProfit = pos.realized + pos.fees;
+      outRows.push([
+        pos.closeTime,
+        pos.closeTime,
+        pair,
+        side === 'long' ? 'LONG' : 'SHORT',
+        String(pos.closeQty),
+        String(exitPrice),
+        String(exitPrice),
+        String(netProfit),
+        `Import BingX Futures · ⚠️ apertura non presente nel file (fuori dall'intervallo esportato): prezzo di entrata stimato = prezzo di uscita, PnL reale · PnL lordo ${pos.realized.toFixed(4)} USDT · fee totali ${Math.abs(pos.fees).toFixed(4)} USDT`,
+        '',
+      ]);
+    }
+  });
+
+  if (!outRows.length) return null;
+  return outRows;
+}
+
 // Converte il testo grezzo di un CSV in una matrice di righe grezze, senza
 // assumere che la prima riga sia l'intestazione (serve ai riconoscitori sopra,
 // che cercano da soli la riga di intestazione corretta, es. per i file Bybit
@@ -1798,6 +2065,26 @@ function handleXlsxFile(file) {
       return;
     }
 
+    const mexcRows = extractMexcFuturesFills(sheetRows);
+    if (mexcRows) {
+      csvHeaders = MEXC_HEADER_LABELS;
+      csvRows = mexcRows;
+      csvAutoDetected = true;
+      renderCsvMap(MEXC_COLUMN_MAP);
+      toast(`Export MEXC riconosciuto: ${mexcRows.length} posizioni chiuse trovate`);
+      return;
+    }
+
+    const bingxRows = extractBingxFuturesFills(sheetRows);
+    if (bingxRows) {
+      csvHeaders = BINGX_HEADER_LABELS;
+      csvRows = bingxRows;
+      csvAutoDetected = true;
+      renderCsvMap(BINGX_COLUMN_MAP);
+      toast(`Export BingX riconosciuto: ${bingxRows.length} posizioni chiuse trovate`);
+      return;
+    }
+
     // Fallback: nessun formato MetaTrader riconosciuto, trattiamo il primo
     // foglio come una tabella generica (prima riga = intestazioni).
     if (!sheetRows.length) {
@@ -1844,6 +2131,26 @@ function handleCsvFile(file) {
       csvAutoDetected = true;
       renderCsvMap(BITGET_COLUMN_MAP);
       toast(`Export Bitget/Bybit riconosciuto: ${bitgetRows.length} chiusure trovate`);
+      return;
+    }
+
+    const mexcRows = extractMexcFuturesFills(sheetRows);
+    if (mexcRows) {
+      csvHeaders = MEXC_HEADER_LABELS;
+      csvRows = mexcRows;
+      csvAutoDetected = true;
+      renderCsvMap(MEXC_COLUMN_MAP);
+      toast(`Export MEXC riconosciuto: ${mexcRows.length} posizioni chiuse trovate`);
+      return;
+    }
+
+    const bingxRows = extractBingxFuturesFills(sheetRows);
+    if (bingxRows) {
+      csvHeaders = BINGX_HEADER_LABELS;
+      csvRows = bingxRows;
+      csvAutoDetected = true;
+      renderCsvMap(BINGX_COLUMN_MAP);
+      toast(`Export BingX riconosciuto: ${bingxRows.length} posizioni chiuse trovate`);
       return;
     }
 
