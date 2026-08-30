@@ -409,6 +409,107 @@ function lastNRValues(n) {
   return last.map((t, idx) => ({ label: String(idx + 1), r: calcTradeR(t) })).filter(x => x.r !== null && isFinite(x.r));
 }
 
+/* ---------------- calendario P&L (widget dashboard) ---------------- */
+
+let CAL_VIEW = null; // { year, month } — month 0-11, stato di navigazione del widget
+
+function calendarViewOrNow() {
+  if (!CAL_VIEW) {
+    const now = new Date();
+    CAL_VIEW = { year: now.getFullYear(), month: now.getMonth() };
+  }
+  return CAL_VIEW;
+}
+
+// aggrega P&L e numero di trade per giorno di chiusura ('YYYY-MM-DD' -> {trades, pnl})
+function calendarDailyStats() {
+  const map = {};
+  closedTrades().forEach(t => {
+    const d = new Date(t.closeDate);
+    if (isNaN(d)) return;
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (!map[key]) map[key] = { trades: 0, pnl: 0 };
+    map[key].trades += 1;
+    map[key].pnl += (t.profit || 0);
+  });
+  return map;
+}
+
+function calendarChangeMonth(delta) {
+  const v = calendarViewOrNow();
+  v.month += delta;
+  if (v.month < 0) { v.month = 11; v.year -= 1; }
+  if (v.month > 11) { v.month = 0; v.year += 1; }
+  renderCalendarHeatmap();
+}
+function calendarChangeYear(delta) {
+  const v = calendarViewOrNow();
+  v.year += delta;
+  renderCalendarHeatmap();
+}
+
+const CAL_MONTH_NAMES = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+
+function renderCalendarHeatmap() {
+  const grid = document.getElementById('cal-grid');
+  const monthLabel = document.getElementById('cal-month-label');
+  const yearLabel = document.getElementById('cal-year-label');
+  if (!grid || !monthLabel || !yearLabel) return;
+
+  const { year: y, month: m } = calendarViewOrNow();
+  monthLabel.textContent = CAL_MONTH_NAMES[m];
+  yearLabel.textContent = String(y);
+
+  const stats = calendarDailyStats();
+  const lastOfMonth = new Date(y, m + 1, 0);
+
+  // trova il lunedì di inizio griglia: il lunedì della settimana che contiene il giorno 1
+  const gridStart = new Date(y, m, 1);
+  while (gridStart.getDay() !== 1) gridStart.setDate(gridStart.getDate() - 1);
+
+  const cells = [];
+  const cursor = new Date(gridStart);
+  // avanza giorno per giorno (solo Lun-Ven) finché non abbiamo coperto il mese
+  // e completato l'ultima riga (multiplo di 5 celle)
+  while (cursor <= lastOfMonth || cells.length % 5 !== 0) {
+    const dow = cursor.getDay();
+    if (dow >= 1 && dow <= 5) {
+      const inMonth = cursor.getMonth() === m && cursor.getFullYear() === y;
+      const key = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
+      cells.push({ dayNum: cursor.getDate(), outside: !inMonth, data: inMonth ? (stats[key] || null) : null });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+    if (cells.length > 60) break; // valvola di sicurezza anti-loop
+  }
+
+  grid.innerHTML = cells.map(c => {
+    if (c.outside) {
+      return `<div class="cal-day cal-outside"><div class="cal-day-num">${c.dayNum}</div></div>`;
+    }
+    if (!c.data) {
+      return `<div class="cal-day"><div class="cal-day-num">${c.dayNum}</div></div>`;
+    }
+    const cls = c.data.pnl > 0 ? 'cal-win' : (c.data.pnl < 0 ? 'cal-loss' : '');
+    return `
+      <div class="cal-day ${cls}">
+        <div class="cal-day-num">${c.dayNum}</div>
+        <div class="cal-day-info">
+          <div class="cal-day-trades">${c.data.trades} trade${c.data.trades === 1 ? '' : 's'}</div>
+          <div class="cal-day-pnl">${fmtMoney(c.data.pnl, { signed: true })}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function initCalendarWidget() {
+  const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  bind('cal-prev-month', () => calendarChangeMonth(-1));
+  bind('cal-next-month', () => calendarChangeMonth(1));
+  bind('cal-prev-year', () => calendarChangeYear(-1));
+  bind('cal-next-year', () => calendarChangeYear(1));
+}
+initCalendarWidget();
+
 /* ---------------- rendering: dashboard ---------------- */
 
 // Each render* call below is independent — if one throws (bad data, ad-blocker
@@ -466,6 +567,7 @@ function renderDashboard() {
   safeRender('renderPerInstrumentTable', renderPerInstrumentTable);
   safeRender('renderPerStrategyTable', renderPerStrategyTable);
   safeRender('renderBubbleChart', renderBubbleChart);
+  safeRender('renderCalendarHeatmap', renderCalendarHeatmap);
 }
 
 

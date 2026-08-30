@@ -208,6 +208,41 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
   opacity:0.35;
 }
 .dash-widget.dw-resizing{transition:none !important;}
+
+/* --- calendario P&L (widget dashboard) --- */
+.cal-nav{display:flex; align-items:center; gap:4px;}
+.cal-nav-label{font-size:12.5px; font-weight:600; text-align:center; color:var(--text-dim);}
+.cal-weekdays{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:2px;}
+.cal-weekdays div{font-size:11px; color:var(--text-faint); padding-left:2px; text-transform:uppercase; letter-spacing:.03em;}
+.cal-grid{
+  display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:8px;
+  flex:1 1 auto; grid-auto-rows:1fr;
+}
+.cal-day{
+  border-radius:8px; border:1px solid var(--border-soft); padding:9px 10px;
+  display:flex; flex-direction:column; justify-content:space-between; min-height:64px;
+  background:var(--bg-elevated,#0F1319);
+}
+.cal-day-num{font-size:12px; color:var(--text-dim); text-align:right; font-weight:600;}
+.cal-day-info{display:flex; flex-direction:column; gap:1px;}
+.cal-day-trades{font-size:11px; color:var(--text-dim);}
+.cal-day-pnl{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;}
+.cal-day.cal-win{background:var(--green-dim); border-color:rgba(51,196,139,0.3);}
+.cal-day.cal-win .cal-day-pnl{color:var(--green);}
+.cal-day.cal-win .cal-day-num{color:var(--text-dim);}
+.cal-day.cal-loss{background:var(--red-dim); border-color:rgba(241,77,104,0.3);}
+.cal-day.cal-loss .cal-day-pnl{color:var(--red);}
+.cal-day.cal-loss .cal-day-num{color:var(--text-dim);}
+.cal-day.cal-outside{background:transparent; opacity:0.32;}
+@media(max-width:640px){
+  .cal-weekdays{gap:4px;}
+  .cal-grid{gap:4px;}
+  .cal-day{padding:6px 7px; min-height:52px;}
+  .cal-day-num{font-size:11px;}
+  .cal-day-trades{font-size:9.5px;}
+  .cal-day-pnl{font-size:10.5px;}
+  .cal-nav-label{font-size:11.5px;}
+}
 .dash-widget.dw-placeholder{
   border:1.5px dashed var(--blue); background:var(--blue-dim); border-radius:var(--radius);
 }
@@ -720,6 +755,38 @@ img, canvas, svg{max-width:100%;}
           </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-equity"></canvas></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
+      </div>
+
+      <div class="panel dash-widget" data-widget-id="calendar" data-default-width="100" data-default-height="560">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Calendario P&amp;L</div>
+            <div class="panel-title-sub">Risultato e numero di operazioni per giorno di chiusura</div>
+          </div>
+          <div class="cal-nav">
+            <button type="button" class="icon-btn" id="cal-prev-year" title="Anno precedente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg>
+            </button>
+            <div class="cal-nav-label mono" id="cal-year-label">2026</div>
+            <button type="button" class="icon-btn" id="cal-next-year" title="Anno successivo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg>
+            </button>
+            <span style="width:8px;"></span>
+            <button type="button" class="icon-btn" id="cal-prev-month" title="Mese precedente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>
+            </button>
+            <div class="cal-nav-label" id="cal-month-label" style="min-width:78px;">Agosto</div>
+            <button type="button" class="icon-btn" id="cal-next-month" title="Mese successivo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cal-weekdays">
+          <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
         <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
 
