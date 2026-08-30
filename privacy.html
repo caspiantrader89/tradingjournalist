@@ -73,7 +73,8 @@ a{color:var(--blue);}
   <table>
     <tr><th>Categoria</th><th>Esempi</th><th>Fonte</th></tr>
     <tr><td>Dati di account</td><td>Nome, cognome, email, password (salvata in forma crittografata da Firebase Authentication)</td><td>Forniti direttamente dall'utente</td></tr>
-    <tr><td>Dati di profilo</td><td>Paese di residenza, livello di esperienza nel trading, come l'utente ha conosciuto il Servizio</td><td>Forniti direttamente dall'utente in fase di registrazione</td></tr>
+    <tr><td>Dati di profilo (facoltativi)</td><td>Paese di residenza, livello di esperienza nel trading, come l'utente ha conosciuto il Servizio</td><td>Forniti facoltativamente dall'utente in fase di registrazione</td></tr>
+    <tr><td>Dati di autocertificazione età</td><td>Conferma di avere almeno 16 anni, con data e ora</td><td>Registrati automaticamente in fase di registrazione</td></tr>
     <tr><td>Dati di utilizzo del diario di trading</td><td>Operazioni inserite, strategie, note, importi, capitale, allegati caricati</td><td>Inseriti direttamente dall'utente</td></tr>
     <tr><td>Dati tecnici</td><td>Indirizzo IP, tipo di browser/dispositivo, log di accesso</td><td>Raccolti automaticamente da Firebase/Google Cloud</td></tr>
     <tr><td>Dati di consenso</td><td>Accettazione termini, preferenze cookie, consenso marketing, data e ora del consenso</td><td>Registrati automaticamente all'atto della scelta dell'utente</td></tr>
@@ -83,12 +84,13 @@ a{color:var(--blue);}
   <table>
     <tr><th>Finalità</th><th>Base giuridica</th></tr>
     <tr><td>Creazione e gestione dell'account, erogazione del Servizio</td><td>Esecuzione di un contratto (art. 6.1.b GDPR)</td></tr>
+    <tr><td>Raccolta facoltativa di dati di profilo (paese, esperienza, come ci hai conosciuto), a fini statistici e di miglioramento del Servizio</td><td>Consenso esplicito, fornito lasciando compilato il relativo campo facoltativo (art. 6.1.a GDPR)</td></tr>
     <tr><td>Sicurezza, prevenzione frodi, log tecnici</td><td>Legittimo interesse del titolare (art. 6.1.f GDPR)</td></tr>
     <tr><td>Adempimenti fiscali/legali, ove applicabili</td><td>Obbligo legale (art. 6.1.c GDPR)</td></tr>
     <tr><td>Invio di comunicazioni di marketing, newsletter, novità sul prodotto</td><td>Consenso esplicito e revocabile in ogni momento (art. 6.1.a GDPR)</td></tr>
     <tr><td>Cookie/tecnologie non necessarie (analitiche, marketing)</td><td>Consenso esplicito tramite banner cookie (art. 6.1.a GDPR)</td></tr>
   </table>
-  <p>Il conferimento dei dati necessari all'erogazione del Servizio è obbligatorio: in assenza non è possibile creare un account. Il consenso al marketing e ai cookie non necessari è invece facoltativo e non condiziona l'accesso al Servizio.</p>
+  <p>Il conferimento dei dati necessari all'erogazione del Servizio (nome, cognome, email, password) è obbligatorio: in assenza non è possibile creare un account. I dati di profilo (paese, esperienza di trading, come ci hai conosciuto) sono invece facoltativi e possono essere lasciati vuoti senza alcuna conseguenza sulla creazione dell'account o sull'uso del Servizio. Il consenso al marketing e ai cookie non necessari è anch'esso facoltativo e non condiziona l'accesso al Servizio.</p>
 
   <h2 id="conservazione">4. Periodo di conservazione</h2>
   <p>
@@ -136,8 +138,11 @@ a{color:var(--blue);}
 
   <h2 id="minori">8. Minori</h2>
   <p>
-    Il Servizio non è destinato a minori di 16 anni. Non raccogliamo consapevolmente dati di minori;
-    qualora ne venissimo a conoscenza, procederemo alla cancellazione dei relativi dati.
+    Il Servizio non è destinato a minori di 16 anni. In fase di registrazione chiediamo
+    all'utente di autocertificare, tramite apposita spunta, di avere almeno 16 anni; tale
+    dichiarazione viene registrata con data e ora. Non raccogliamo consapevolmente dati di minori;
+    qualora ne venissimo a conoscenza, nonostante l'autocertificazione fornita, procederemo alla
+    cancellazione dei relativi dati.
   </p>
 
   <h2 id="cookie">9. Cookie</h2>

@@ -23,10 +23,14 @@ async function saveRegistrationProfile(user, data) {
     email: user.email || null,
     nome: data.nome,
     cognome: data.cognome,
-    paese: data.paese,
-    esperienzaTrading: data.esperienza,
-    comeCiHaConosciuto: data.referral,
+    // Campi facoltativi: se l'utente non li compila restano null,
+    // non vengono salvati stringhe vuote.
+    paese: data.paese || null,
+    esperienzaTrading: data.esperienza || null,
+    comeCiHaConosciuto: data.referral || null,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ageConfirmed: true,
+    ageConfirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
     termsAccepted: true,
     termsAcceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
     consentVersion: CONSENT_VERSION,
@@ -48,15 +52,12 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
   const paese = document.getElementById('reg-paese').value;
   const esperienza = document.getElementById('reg-esperienza').value;
   const referral = document.getElementById('reg-referral').value;
+  const ageOk = document.getElementById('reg-consent-age').checked;
   const termsOk = document.getElementById('reg-consent-terms').checked;
   const marketingOk = document.getElementById('reg-consent-marketing').checked;
 
   if (!nome || !cognome || !email || !pass || !passConfirm) {
     errBox.textContent = 'Compila tutti i campi obbligatori.';
-    return;
-  }
-  if (!paese || !esperienza || !referral) {
-    errBox.textContent = 'Seleziona tutte le opzioni richieste.';
     return;
   }
   if (pass.length < 6) {
@@ -65,6 +66,10 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
   }
   if (pass !== passConfirm) {
     errBox.textContent = 'Le due password non coincidono.';
+    return;
+  }
+  if (!ageOk) {
+    errBox.textContent = 'Devi confermare di avere almeno 16 anni per registrarti.';
     return;
   }
   if (!termsOk) {

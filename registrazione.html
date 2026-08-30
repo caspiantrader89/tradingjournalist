@@ -98,9 +98,9 @@ html{overflow-x:hidden;}
         </div>
 
         <div>
-          <label class="field-label" for="reg-paese">Paese</label>
-          <select id="reg-paese" required>
-            <option value="" disabled selected>Seleziona...</option>
+          <label class="field-label" for="reg-paese">Paese <span style="color:var(--text-faint);">(facoltativo)</span></label>
+          <select id="reg-paese">
+            <option value="" selected>Preferisco non specificare</option>
             <option value="IT">Italia</option>
             <option value="CH">Svizzera</option>
             <option value="SM">San Marino</option>
@@ -114,9 +114,9 @@ html{overflow-x:hidden;}
         </div>
 
         <div>
-          <label class="field-label" for="reg-esperienza">Livello di esperienza nel trading</label>
-          <select id="reg-esperienza" required>
-            <option value="" disabled selected>Seleziona...</option>
+          <label class="field-label" for="reg-esperienza">Livello di esperienza nel trading <span style="color:var(--text-faint);">(facoltativo)</span></label>
+          <select id="reg-esperienza">
+            <option value="" selected>Preferisco non specificare</option>
             <option value="principiante">Principiante (meno di 1 anno)</option>
             <option value="intermedio">Intermedio (1-3 anni)</option>
             <option value="avanzato">Avanzato (oltre 3 anni)</option>
@@ -124,9 +124,9 @@ html{overflow-x:hidden;}
         </div>
 
         <div>
-          <label class="field-label" for="reg-referral">Come ci hai conosciuto?</label>
-          <select id="reg-referral" required>
-            <option value="" disabled selected>Seleziona...</option>
+          <label class="field-label" for="reg-referral">Come ci hai conosciuto? <span style="color:var(--text-faint);">(facoltativo)</span></label>
+          <select id="reg-referral">
+            <option value="" selected>Preferisco non specificare</option>
             <option value="social">Social media</option>
             <option value="passaparola">Passaparola / amici</option>
             <option value="motore_ricerca">Motore di ricerca</option>
@@ -136,6 +136,10 @@ html{overflow-x:hidden;}
         </div>
 
         <div class="consents">
+          <label>
+            <input type="checkbox" id="reg-consent-age">
+            <span>Dichiaro di avere almeno 16 anni. *</span>
+          </label>
           <label>
             <input type="checkbox" id="reg-consent-terms">
             <span>Ho letto e accetto i <a href="termini.html" target="_blank">Termini di Servizio</a>
