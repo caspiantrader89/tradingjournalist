@@ -1142,19 +1142,19 @@ function strategyModalHtml(existing) {
     <div style="display:flex; flex-direction:column; gap:12px; max-height:65vh; overflow-y:auto; padding-right:4px;">
       <div class="field"><label>Nome</label><input type="text" id="modal-s-name" value="${s.name}"></div>
       <div class="field"><label>Descrizione</label><textarea id="modal-s-desc" rows="2">${s.description || ''}</textarea></div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-grid-2" style="gap:12px;">
         <div class="field"><label>Bias</label><input type="text" id="modal-s-bias" value="${s.bias || ''}" placeholder="es. Trend following"></div>
         <div class="field"><label>Struttura</label><input type="text" id="modal-s-struttura" value="${s.struttura || ''}" placeholder="es. Rottura + retest"></div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-grid-2" style="gap:12px;">
         <div class="field"><label>% rischio da</label><input type="number" step="0.01" id="modal-s-riskfrom" value="${s.riskPctFrom ?? ''}"></div>
         <div class="field"><label>% rischio a</label><input type="number" step="0.01" id="modal-s-riskto" value="${s.riskPctTo ?? ''}"></div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-grid-2" style="gap:12px;">
         <div class="field"><label>R:R minimo</label><input type="number" step="0.1" id="modal-s-rrfrom" value="${s.rrFrom ?? ''}"></div>
         <div class="field"><label>R:R massimo</label><input type="number" step="0.1" id="modal-s-rrto" value="${s.rrTo ?? ''}"></div>
       </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-grid-2" style="gap:12px;">
         <div class="field"><label>Orario da</label><input type="time" id="modal-s-hoursfrom" value="${s.hoursFrom || ''}"></div>
         <div class="field"><label>Orario a</label><input type="time" id="modal-s-hoursto" value="${s.hoursTo || ''}"></div>
       </div>

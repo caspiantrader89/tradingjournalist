@@ -286,12 +286,23 @@ tbody tr:hover .row-actions{opacity:1;}
 
 /* form */
 .form-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px 16px;}
-@media(max-width:760px){.form-grid{grid-template-columns:repeat(2,1fr);}}
-.field{display:flex; flex-direction:column; gap:6px;}
+/* Sotto i 760px passiamo a 1 colonna: con 2 colonne, un singolo campo con
+   una larghezza minima nativa non comprimibile (es. il picker data/ora
+   dei browser mobile) costringeva l'intera colonna a restare larga,
+   tagliando fuori tutte le altre righe accanto. */
+@media(max-width:760px){.form-grid{grid-template-columns:1fr;}}
+.field{display:flex; flex-direction:column; gap:6px; min-width:0;}
+.field input, .field select, .field textarea{width:100%; box-sizing:border-box;}
 .field label{font-size:11.5px; color:var(--text-dim); font-weight:500;}
 .field.span2{grid-column:span 2;}
 .field.span3{grid-column:span 3;}
-@media(max-width:760px){.field.span3{grid-column:span 2;}}
+@media(max-width:760px){.field.span2,.field.span3{grid-column:span 1;}}
+/* Griglia a 2 colonne riusabile (calcolatore, modale strategia) al posto
+   di stili inline "grid-template-columns:1fr 1fr", che ignoravano questo
+   breakpoint mobile perché uno stile inline vince sempre su una media
+   query esterna. */
+.form-grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px 16px;}
+@media(max-width:760px){.form-grid-2{grid-template-columns:1fr;}}
 .seg{display:flex; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;}
 .seg button{flex:1; padding:9px; background:var(--surface-2); border:none; color:var(--text-dim); font-size:13px; font-weight:600; transition:all .12s;}
 .seg button.on.buy{background:var(--green-dim); color:var(--green);}
@@ -1111,7 +1122,7 @@ img, canvas, svg{max-width:100%;}
     </div>
     <div class="panel">
       <div class="calc-layout">
-        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="form-grid-2">
           <div class="field">
             <label>Strumento</label>
             <select id="c-instrument"></select>
