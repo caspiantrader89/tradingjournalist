@@ -28,7 +28,24 @@
 
   let currentFormat = 'square';
   let customBgImage = null;
+  let shareMode = 'currency'; // 'currency' | 'percent' — indipendente dal toggle globale, scelto qui nel pannello
   let canvas, ctx;
+
+  // Formatta un importo di P&L rispettando la modalità scelta per la share
+  // card (valuta o percentuale sul capitale iniziale del conto). Usa le
+  // funzioni globali già definite in app.js (fmtMoney, fmtNum, pctBase).
+  function moneyOrPct(v, opts = {}) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    if (shareMode === 'percent' && typeof pctBase === 'function') {
+      const base = pctBase();
+      if (base) {
+        const pct = (v / base) * 100;
+        const sign = opts.signed ? (pct > 0 ? '+' : (pct < 0 ? '-' : '')) : (pct < 0 ? '-' : '');
+        return sign + fmtNum(Math.abs(pct), 2) + '%';
+      }
+    }
+    return fmtMoney(v, opts);
+  }
 
   function roundRect(c, x, y, w, h, r) {
     c.beginPath();
@@ -196,7 +213,7 @@
     c.fillText('P&L TOTALE', centerX, labelY);
 
     const pnlColor = data.pnl > 0 ? COLORS.green : (data.pnl < 0 ? COLORS.red : COLORS.text);
-    const pnlText = fmtMoney(data.pnl, { signed: true });
+    const pnlText = moneyOrPct(data.pnl, { signed: true });
     c.fillStyle = pnlColor;
     c.font = `700 ${W * 0.11}px 'Space Grotesk', sans-serif`;
     c.fillText(pnlText, centerX, valueY + W * 0.09);
@@ -305,9 +322,9 @@
     ]);
 
     const bestColor = data.best === null ? COLORS.textDim : (data.best >= 0 ? COLORS.green : COLORS.red);
-    const bestText = data.best === null ? '—' : fmtMoney(data.best, { signed: true });
+    const bestText = data.best === null ? '—' : moneyOrPct(data.best, { signed: true });
     const worstColor = data.worst === null ? COLORS.textDim : (data.worst >= 0 ? COLORS.green : COLORS.red);
-    const worstText = data.worst === null ? '—' : fmtMoney(data.worst, { signed: true });
+    const worstText = data.worst === null ? '—' : moneyOrPct(data.worst, { signed: true });
 
     drawStatsRow(c, W, row2Y, rowH, padX, [
       { label: 'Miglior trade', value: bestText, color: bestColor },
@@ -363,6 +380,15 @@
     render();
   }
 
+  function setShareMode(mode) {
+    shareMode = (mode === 'percent') ? 'percent' : 'currency';
+    const curBtn = document.getElementById('share-mode-currency');
+    const pctBtn = document.getElementById('share-mode-percent');
+    if (curBtn) { curBtn.classList.toggle('btn-primary', shareMode === 'currency'); curBtn.classList.toggle('btn-ghost', shareMode !== 'currency'); }
+    if (pctBtn) { pctBtn.classList.toggle('btn-primary', shareMode === 'percent'); pctBtn.classList.toggle('btn-ghost', shareMode !== 'percent'); }
+    render();
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     canvas = document.getElementById('share-card-canvas');
 
@@ -373,7 +399,15 @@
       const bgResetBtn = document.getElementById('share-bg-reset-btn');
       if (bgResetBtn) bgResetBtn.style.display = customBgImage ? '' : 'none';
       setFormat('square');
+      // all'apertura, la share card riparte dalla modalità (€/%) scelta
+      // globalmente nella sidebar, ma resta modificabile qui in autonomia
+      setShareMode((typeof DISPLAY_MODE !== 'undefined') ? DISPLAY_MODE : 'currency');
     });
+
+    const shareModeCurrencyBtn = document.getElementById('share-mode-currency');
+    if (shareModeCurrencyBtn) shareModeCurrencyBtn.addEventListener('click', () => setShareMode('currency'));
+    const shareModePercentBtn = document.getElementById('share-mode-percent');
+    if (shareModePercentBtn) shareModePercentBtn.addEventListener('click', () => setShareMode('percent'));
 
     const closeBtn = document.getElementById('close-share-card-btn');
     if (closeBtn) closeBtn.addEventListener('click', () => {
@@ -458,4 +492,8 @@
       }, 'image/png');
     });
   });
+
+  // esposto per permettere a app.js di ridisegnare la card (es. se il
+  // pannello resta aperto mentre si cambia il toggle valuta/% globale)
+  window.ShareCard = { render: () => render() };
 })();

@@ -198,6 +198,117 @@ function fmtPct(v, dec = 1) {
   if (v === null || v === undefined || isNaN(v)) return '—';
   return fmtNum(v, dec) + '%';
 }
+
+// Simbolo della valuta correntemente impostata sul conto (es. "€", "$", "£"),
+// ricavato da Intl in base al codice ISO in STATE.settings.currency: funziona
+// per qualsiasi valuta supportata dal browser, non solo EUR/USD/GBP, così i
+// pulsanti del toggle valuta/percentuale non hanno più l'euro scritto fisso.
+function currencySymbol() {
+  const cur = (STATE && STATE.settings && STATE.settings.currency) || 'EUR';
+  try {
+    const parts = new Intl.NumberFormat('it-IT', { style: 'currency', currency: cur, minimumFractionDigits: 0, maximumFractionDigits: 0 }).formatToParts(0);
+    const symbolPart = parts.find(p => p.type === 'currency');
+    return symbolPart ? symbolPart.value : cur;
+  } catch (e) {
+    return cur; // codice valuta non riconosciuto da Intl: mostra il codice stesso
+  }
+}
+function updateCurrencySymbols() {
+  const sym = currencySymbol();
+  document.querySelectorAll('.dm-symbol').forEach(el => { el.textContent = sym; });
+}
+
+/* ---------------- modalità di visualizzazione: valuta / percentuale ----------------
+   Preferenza puramente visiva (non tocca i dati salvati): vive in localStorage,
+   quindi è per browser/dispositivo e vale per tutti i conti. Un'unica leva,
+   usata ovunque nell'app (dashboard, registro, posizioni aperte, report PDF,
+   share card), così il toggle nella sidebar vale davvero "su tutto".
+   ------------------------------------------------------------------------------- */
+const DISPLAY_MODE_KEY = 'tj_display_mode';
+let DISPLAY_MODE = (localStorage.getItem(DISPLAY_MODE_KEY) === 'percent') ? 'percent' : 'currency';
+
+function pctBase() {
+  return (STATE && STATE.settings && STATE.settings.initialCapital) || 0;
+}
+
+// Per importi che sono già una VARIAZIONE (P&L di un trade/giorno/mese/
+// strumento/strategia, P&L totale, rischio esposto...): in modalità
+// percentuale li esprime come % del capitale iniziale del conto.
+function fmtMoneyOrPercent(v, opts = {}) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  if (DISPLAY_MODE === 'percent') {
+    const base = pctBase();
+    if (!base) return fmtMoney(v, opts); // nessun capitale iniziale: niente base per calcolare la %
+    const pct = (v / base) * 100;
+    const sign = opts.signed ? (pct > 0 ? '+' : (pct < 0 ? '-' : '')) : (pct < 0 ? '-' : '');
+    return sign + fmtNum(Math.abs(pct), opts.pctDec !== undefined ? opts.pctDec : 2) + '%';
+  }
+  return fmtMoney(v, opts);
+}
+
+// Per importi che sono un LIVELLO (capitale attuale, equity in un istante,
+// non una variazione): in modalità percentuale mostra il rendimento totale
+// del conto rispetto al capitale iniziale, cioè quanto quel livello si è
+// mosso in percentuale dal punto di partenza.
+function fmtLevelOrPercent(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  if (DISPLAY_MODE === 'percent') {
+    const base = pctBase();
+    if (!base) return fmtMoney(v);
+    const pct = ((v - base) / base) * 100;
+    return (pct > 0 ? '+' : (pct < 0 ? '-' : '')) + fmtNum(Math.abs(pct), 2) + '%';
+  }
+  return fmtMoney(v);
+}
+
+function updateDisplayModeToggleUI() {
+  updateCurrencySymbols();
+  document.querySelectorAll('.display-mode-btn[data-mode]').forEach(btn => {
+    btn.classList.toggle('btn-primary', btn.dataset.mode === DISPLAY_MODE);
+    btn.classList.toggle('btn-ghost', btn.dataset.mode !== DISPLAY_MODE);
+  });
+}
+
+// Ridisegna solo la vista attualmente visibile (più il capitale in sidebar,
+// sempre visibile) invece di richiamare showView(), per evitare di far
+// scattare lo scroll-to-top ad ogni click sul toggle.
+function refreshCurrentView() {
+  if (!STATE) return;
+  const renderers = {
+    dashboard: renderDashboard,
+    registro: renderRegistro,
+    conto: renderConto,
+    strumenti: renderStrumenti,
+    aperte: renderAperte,
+    strategie: renderStrategie,
+    calcolatore: renderCalcolatore,
+  };
+  const activeView = document.querySelector('.view.active');
+  const name = activeView ? activeView.id.replace('view-', '') : null;
+  if (name && renderers[name]) {
+    try { renderers[name](); } catch (e) { console.error('[display-mode] refresh vista corrente:', e); }
+  }
+  const sidebarCap = document.getElementById('sidebar-capital');
+  if (sidebarCap) sidebarCap.textContent = fmtLevelOrPercent(currentCapital());
+
+  // se il pannello share card è aperto, ridisegna anche quello
+  const shareBackdrop = document.getElementById('share-card-backdrop');
+  if (shareBackdrop && shareBackdrop.classList.contains('active') && window.ShareCard && window.ShareCard.render) {
+    window.ShareCard.render();
+  }
+}
+
+function setDisplayMode(mode) {
+  DISPLAY_MODE = (mode === 'percent') ? 'percent' : 'currency';
+  try { localStorage.setItem(DISPLAY_MODE_KEY, DISPLAY_MODE); } catch (e) { /* ignore */ }
+  updateDisplayModeToggleUI();
+  refreshCurrentView();
+}
+
+document.querySelectorAll('.display-mode-btn[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => setDisplayMode(btn.dataset.mode));
+});
+updateDisplayModeToggleUI();
 function fmtDate(d) {
   if (!d) return '—';
   const dt = new Date(d);
@@ -495,7 +606,55 @@ function renderCalendarHeatmap() {
         <div class="cal-day-num">${c.dayNum}</div>
         <div class="cal-day-info">
           <div class="cal-day-trades">${c.data.trades} trade${c.data.trades === 1 ? '' : 's'}</div>
-          <div class="cal-day-pnl">${fmtMoney(c.data.pnl, { signed: true })}</div>
+          <div class="cal-day-pnl">${fmtMoneyOrPercent(c.data.pnl, { signed: true })}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ---------------- P&L per orario (widget dashboard, nuovo widget separato) ---------------- */
+
+// aggrega P&L e numero di trade per ora di APERTURA (0-23), su tutto lo storico.
+// L'idea è: l'informazione utile è "apro un trade in una certa fascia oraria,
+// tendo a fare più profitto?" — quindi il trade va "depositato" nel cassetto
+// orario corrispondente all'ingresso (openDate), mentre l'importo del P&L
+// resta ovviamente quello noto solo a chiusura (t.profit).
+// (a differenza del calendario, qui non c'è un mese da navigare: l'ora si ripete ogni giorno)
+function hourlyStats() {
+  const map = {};
+  for (let h = 0; h < 24; h++) map[h] = { trades: 0, pnl: 0 };
+  closedTrades().forEach(t => {
+    const d = new Date(t.openDate);
+    if (isNaN(d)) return;
+    const h = d.getHours();
+    map[h].trades += 1;
+    map[h].pnl += (t.profit || 0);
+  });
+  return map;
+}
+
+function renderHourlyHeatmap() {
+  const grid = document.getElementById('hour-grid');
+  if (!grid) return;
+
+  const stats = hourlyStats();
+  const cells = [];
+  for (let h = 0; h < 24; h++) {
+    cells.push({ hour: h, data: stats[h].trades > 0 ? stats[h] : null });
+  }
+
+  grid.innerHTML = cells.map(c => {
+    const label = String(c.hour).padStart(2, '0') + ':00';
+    if (!c.data) {
+      return `<div class="hour-cell hour-empty"><div class="hour-cell-num">${label}</div></div>`;
+    }
+    const cls = c.data.pnl > 0 ? 'hour-win' : (c.data.pnl < 0 ? 'hour-loss' : '');
+    return `
+      <div class="hour-cell ${cls}">
+        <div class="hour-cell-num">${label}</div>
+        <div class="hour-cell-info">
+          <div class="hour-cell-trades">${c.data.trades} trade${c.data.trades === 1 ? '' : 's'}</div>
+          <div class="hour-cell-pnl">${fmtMoneyOrPercent(c.data.pnl, { signed: true })}</div>
         </div>
       </div>`;
   }).join('');
@@ -524,18 +683,19 @@ function safeRender(name, fn) {
 }
 
 function renderDashboard() {
+  updateCurrencySymbols();
   const cap = currentCapital();
   const pl = totalPL();
   const stats = winRateStats(closedTrades());
   const rr = avgR(closedTrades());
   const ddDay = maxDrawdown('day');
 
-  document.getElementById('sidebar-capital').textContent = fmtMoney(cap);
-  document.getElementById('hero-equity-num').textContent = fmtMoney(cap);
+  document.getElementById('sidebar-capital').textContent = fmtLevelOrPercent(cap);
+  document.getElementById('hero-equity-num').textContent = fmtLevelOrPercent(cap);
 
   const chips = [
-    { label: 'Capitale attuale', value: fmtMoney(cap), delta: null },
-    { label: 'P&L totale', value: fmtMoney(pl, { signed: true }), cls: pl > 0 ? 'up' : (pl < 0 ? 'down' : 'flat') },
+    { label: 'Capitale attuale', value: fmtLevelOrPercent(cap), delta: null },
+    { label: 'P&L totale', value: fmtMoneyOrPercent(pl, { signed: true }), cls: pl > 0 ? 'up' : (pl < 0 ? 'down' : 'flat') },
     { label: 'Win rate', value: stats.total ? fmtPct(stats.rate) : '—', delta: stats.total ? `${stats.wins}W / ${stats.losses}L / ${stats.be}BE` : 'nessun trade chiuso' },
     { label: 'R:R medio', value: rr !== null ? fmtNum(rr, 2) + 'R' : '—' },
     { label: 'Drawdown max (gg)', value: fmtPct(ddDay), cls: ddDay > 0 ? 'down' : 'flat' },
@@ -568,6 +728,7 @@ function renderDashboard() {
   safeRender('renderPerStrategyTable', renderPerStrategyTable);
   safeRender('renderBubbleChart', renderBubbleChart);
   safeRender('renderCalendarHeatmap', renderCalendarHeatmap);
+  safeRender('renderHourlyHeatmap', renderHourlyHeatmap);
 }
 
 
@@ -588,11 +749,11 @@ function renderEquityChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: {
         backgroundColor: '#151B24', borderColor: '#232B37', borderWidth: 1, titleColor: '#8592A3', bodyColor: '#E9EDF3', padding: 10, displayColors: false,
-        callbacks: { label: (c) => fmtMoney(c.parsed.y) }
+        callbacks: { label: (c) => fmtLevelOrPercent(c.parsed.y) }
       } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#4C5768', maxTicksLimit: 8, font: { family: 'IBM Plex Mono', size: 10 } } },
-        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtMoney(v) } }
+        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtLevelOrPercent(v) } }
       },
       interaction: { intersect: false, mode: 'index' }
     }
@@ -631,10 +792,10 @@ function renderMonthlyChart() {
     data: { labels, datasets: [{ data: values, backgroundColor: values.map(v => v >= 0 ? 'rgba(51,196,139,0.75)' : 'rgba(241,77,104,0.75)'), borderRadius: 4, maxBarThickness: 26 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#151B24', borderColor: '#232B37', borderWidth: 1, titleColor: '#8592A3', bodyColor: '#E9EDF3', padding: 10, displayColors: false, callbacks: { label: c => fmtMoney(c.parsed.y, { signed: true }) } } },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#151B24', borderColor: '#232B37', borderWidth: 1, titleColor: '#8592A3', bodyColor: '#E9EDF3', padding: 10, displayColors: false, callbacks: { label: c => fmtMoneyOrPercent(c.parsed.y, { signed: true }) } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 } } },
-        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtMoney(v) } }
+        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtMoneyOrPercent(v) } }
       }
     }
   });
@@ -682,7 +843,7 @@ function renderPerInstrumentTable() {
       <td class="p-neg">${r.stop}</td>
       <td class="p-pos">${r.profit}</td>
       <td>${r.be}</td>
-      <td class="${r.rendimento > 0 ? 'p-pos' : (r.rendimento < 0 ? 'p-neg' : 'p-zero')}">${fmtMoney(r.rendimento, { signed: true })}</td>
+      <td class="${r.rendimento > 0 ? 'p-pos' : (r.rendimento < 0 ? 'p-neg' : 'p-zero')}">${fmtMoneyOrPercent(r.rendimento, { signed: true })}</td>
       <td>${r.rr !== null ? fmtNum(r.rr, 2) + 'R' : '—'}</td>
     </tr>
   `).join('');
@@ -700,7 +861,7 @@ function renderPerStrategyTable() {
       <td class="txt" style="font-weight:600;">${r.name}</td>
       <td>${r.n}</td>
       <td>${r.winRate !== null ? fmtPct(r.winRate) : '—'}</td>
-      <td class="${r.rendimento > 0 ? 'p-pos' : (r.rendimento < 0 ? 'p-neg' : 'p-zero')}">${fmtMoney(r.rendimento, { signed: true })}</td>
+      <td class="${r.rendimento > 0 ? 'p-pos' : (r.rendimento < 0 ? 'p-neg' : 'p-zero')}">${fmtMoneyOrPercent(r.rendimento, { signed: true })}</td>
       <td>${r.rr !== null ? fmtNum(r.rr, 2) + 'R' : '—'}</td>
       <td>${r.avgChecklist !== null ? fmtPct(r.avgChecklist, 0) : '—'}</td>
     </tr>
@@ -716,10 +877,10 @@ function renderWeekdayChart() {
     data: { labels, datasets: [{ data: values, backgroundColor: values.map(v => v >= 0 ? 'rgba(51,196,139,0.75)' : 'rgba(241,77,104,0.75)'), borderRadius: 4, maxBarThickness: 30 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#151B24', borderColor: '#232B37', borderWidth: 1, titleColor: '#8592A3', bodyColor: '#E9EDF3', padding: 10, displayColors: false, callbacks: { label: c => fmtMoney(c.parsed.y, { signed: true }) } } },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#151B24', borderColor: '#232B37', borderWidth: 1, titleColor: '#8592A3', bodyColor: '#E9EDF3', padding: 10, displayColors: false, callbacks: { label: c => fmtMoneyOrPercent(c.parsed.y, { signed: true }) } } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 } } },
-        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtMoney(v) } }
+        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtMoneyOrPercent(v) } }
       }
     }
   });
@@ -829,7 +990,7 @@ function renderBubbleChart() {
     const fontAmt = Math.max(11, Math.min(18, b.r / 4.4));
     el.innerHTML = `
       <div class="bubble-pair" style="font-size:${fontPair}px;">${b.t.instrument}</div>
-      <div class="bubble-amount" style="font-size:${fontAmt}px;">${fmtMoney(b.t.profit, { signed: true })}</div>
+      <div class="bubble-amount" style="font-size:${fontAmt}px;">${fmtMoneyOrPercent(b.t.profit, { signed: true })}</div>
     `;
 
     b.el = el;
@@ -1034,7 +1195,7 @@ function renderRegistro() {
       <td>${t.slPrice ?? '—'}</td>
       <td>${t.tpPrice ?? '—'}</td>
       <td>${r !== null ? fmtNum(r, 2) + 'R' : '—'}</td>
-      <td class="${plCls}">${t.profit !== null && t.profit !== undefined ? fmtMoney(t.profit, { signed: true }) : '—'}</td>
+      <td class="${plCls}">${t.profit !== null && t.profit !== undefined ? fmtMoneyOrPercent(t.profit, { signed: true }) : '—'}</td>
       <td><span class="pill ${t.status === 'OPEN' ? 'pill-open' : 'pill-closed'}">${t.status === 'OPEN' ? 'Aperta' : 'Chiusa'}</span></td>
       <td class="txt">${t.strategy || '—'}</td>
       <td>
@@ -1120,8 +1281,8 @@ function renderAperte() {
   }, 0);
   document.getElementById('aperte-stats').innerHTML = [
     { label: 'Posizioni aperte', value: String(open.length) },
-    { label: 'P&L non realizzato', value: fmtMoney(totalUnrealized, { signed: true }), cls: totalUnrealized > 0 ? 'up' : (totalUnrealized < 0 ? 'down' : 'flat') },
-    { label: 'Rischio totale esposto', value: fmtMoney(totalRisk) },
+    { label: 'P&L non realizzato', value: fmtMoneyOrPercent(totalUnrealized, { signed: true }), cls: totalUnrealized > 0 ? 'up' : (totalUnrealized < 0 ? 'down' : 'flat') },
+    { label: 'Rischio totale esposto', value: fmtMoneyOrPercent(totalRisk) },
   ].map(c => `
     <div class="stat-card">
       <div class="stat-label">${c.label}</div>
@@ -1152,7 +1313,7 @@ function renderAperte() {
       <td>${t.slPrice ?? '—'}</td>
       <td>${t.tpPrice ?? '—'}</td>
       <td>${daysOpen(t)}</td>
-      <td class="${cls}">${unreal !== null ? fmtMoney(unreal, { signed: true }) : '—'}</td>
+      <td class="${cls}">${unreal !== null ? fmtMoneyOrPercent(unreal, { signed: true }) : '—'}</td>
       <td>
         <div class="row-actions">
           <button class="icon-btn" title="Modifica" onclick="editTrade('${t.id}')">
@@ -1378,9 +1539,9 @@ function computeCalculator() {
 
   document.getElementById('c-out-lots').textContent = out.lots !== null ? fmtNum(out.lots, 2) : '—';
   document.getElementById('c-out-units').textContent = out.units !== null ? fmtNum(out.units, 0) : '—';
-  document.getElementById('c-out-risk').textContent = out.risk !== null ? fmtMoney(out.risk) : '—';
+  document.getElementById('c-out-risk').textContent = out.risk !== null ? fmtMoneyOrPercent(out.risk) : '—';
   document.getElementById('c-out-slpips').textContent = out.slPips !== null ? fmtNum(out.slPips, 1) : '—';
-  document.getElementById('c-out-tpprofit').textContent = out.tpProfit !== null ? fmtMoney(out.tpProfit, { signed: true }) : '—';
+  document.getElementById('c-out-tpprofit').textContent = out.tpProfit !== null ? fmtMoneyOrPercent(out.tpProfit, { signed: true }) : '—';
   document.getElementById('c-out-rr').textContent = out.rr !== null ? fmtNum(out.rr, 2) + 'R' : '—';
 
   return { instrument: name, direction, entry, sl, tp, lots: out.lots };
@@ -2856,6 +3017,7 @@ document.getElementById('btn-save-capital').addEventListener('click', async () =
   STATE.settings.initialCapital = parseFloat(document.getElementById('f-initial-capital').value) || 0;
   STATE.settings.currency = document.getElementById('f-currency').value;
   await Storage.save(STATE);
+  updateCurrencySymbols();
   renderConto();
   toast('Capitale aggiornato');
 });
@@ -3036,8 +3198,8 @@ function exportDashboardPdf() {
   } catch (e) { /* chart not ready, skip image */ }
 
   const kpis = [
-    { label: 'Capitale attuale', value: fmtMoney(cap) },
-    { label: 'P&L totale', value: fmtMoney(pl, { signed: true }), cls: pl > 0 ? 'pos' : (pl < 0 ? 'neg' : '') },
+    { label: 'Capitale attuale', value: fmtLevelOrPercent(cap) },
+    { label: 'P&L totale', value: fmtMoneyOrPercent(pl, { signed: true }), cls: pl > 0 ? 'pos' : (pl < 0 ? 'neg' : '') },
     { label: 'Win rate', value: stats.total ? fmtPct(stats.rate) : '—' },
     { label: 'R:R medio', value: rr !== null ? fmtNum(rr, 2) + 'R' : '—' },
     { label: 'Drawdown max (gg)', value: fmtPct(ddDay), cls: ddDay > 0 ? 'neg' : '' },
@@ -3061,7 +3223,7 @@ function exportDashboardPdf() {
           <tr>
             <td class="txt">${r.name}</td><td>${r.n}</td><td>${r.winRate !== null ? fmtPct(r.winRate) : '—'}</td>
             <td>${r.stop}</td><td>${r.profit}</td><td>${r.be}</td>
-            <td class="${r.rendimento > 0 ? 'pr-pos' : (r.rendimento < 0 ? 'pr-neg' : '')}">${fmtMoney(r.rendimento, { signed: true })}</td>
+            <td class="${r.rendimento > 0 ? 'pr-pos' : (r.rendimento < 0 ? 'pr-neg' : '')}">${fmtMoneyOrPercent(r.rendimento, { signed: true })}</td>
             <td>${r.rr !== null ? fmtNum(r.rr, 2) + 'R' : '—'}</td>
           </tr>`).join('') : `<tr><td colspan="8" class="txt" style="text-align:center; color:#999;">Nessuna operazione chiusa</td></tr>`}
       </tbody>
@@ -3074,7 +3236,7 @@ function exportDashboardPdf() {
         ${stratRows.map(r => `
           <tr>
             <td class="txt">${r.name}</td><td>${r.n}</td><td>${r.winRate !== null ? fmtPct(r.winRate) : '—'}</td>
-            <td class="${r.rendimento > 0 ? 'pr-pos' : (r.rendimento < 0 ? 'pr-neg' : '')}">${fmtMoney(r.rendimento, { signed: true })}</td>
+            <td class="${r.rendimento > 0 ? 'pr-pos' : (r.rendimento < 0 ? 'pr-neg' : '')}">${fmtMoneyOrPercent(r.rendimento, { signed: true })}</td>
             <td>${r.rr !== null ? fmtNum(r.rr, 2) + 'R' : '—'}</td>
           </tr>`).join('')}
       </tbody>
@@ -3107,7 +3269,7 @@ function exportRegistroPdf() {
             <td>${t.slPrice ?? '—'}</td>
             <td>${t.tpPrice ?? '—'}</td>
             <td>${r !== null ? fmtNum(r, 2) + 'R' : '—'}</td>
-            <td class="${plCls}">${t.profit !== null && t.profit !== undefined ? fmtMoney(t.profit, { signed: true }) : '—'}</td>
+            <td class="${plCls}">${t.profit !== null && t.profit !== undefined ? fmtMoneyOrPercent(t.profit, { signed: true }) : '—'}</td>
             <td class="txt">${t.status === 'OPEN' ? 'Aperta' : 'Chiusa'}</td>
             <td class="txt">${t.strategy || '—'}</td>
           </tr>`;
@@ -3123,7 +3285,7 @@ function exportApertePdf() {
   const open = STATE.trades.filter(t => t.status === 'OPEN');
   const totalUnrealized = open.reduce((s, t) => s + (calcUnrealized(t) || 0), 0);
   const html = `
-    ${printHeaderHtml('Posizioni aperte', `${open.length} posizioni · P&L non realizzato: ${fmtMoney(totalUnrealized, { signed: true })}`)}
+    ${printHeaderHtml('Posizioni aperte', `${open.length} posizioni · P&L non realizzato: ${fmtMoneyOrPercent(totalUnrealized, { signed: true })}`)}
     <table class="pr-table">
       <thead><tr>
         <th>Apertura</th><th>Strumento</th><th>Dir.</th><th>Lotti</th><th>Entry</th><th>Attuale</th><th>SL</th><th>TP</th><th>Giorni</th><th>P&amp;L non real.</th>
@@ -3143,7 +3305,7 @@ function exportApertePdf() {
             <td>${t.slPrice ?? '—'}</td>
             <td>${t.tpPrice ?? '—'}</td>
             <td>${daysOpen(t)}</td>
-            <td class="${cls}">${unreal !== null ? fmtMoney(unreal, { signed: true }) : '—'}</td>
+            <td class="${cls}">${unreal !== null ? fmtMoneyOrPercent(unreal, { signed: true }) : '—'}</td>
           </tr>`;
         }).join('') : `<tr><td colspan="10" class="txt" style="text-align:center; color:#999;">Nessuna posizione aperta</td></tr>`}
       </tbody>

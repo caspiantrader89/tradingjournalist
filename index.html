@@ -107,6 +107,16 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 }
 .sidebar-foot b{color:var(--text-dim); font-weight:600;}
 .sidebar-foot-logo{height:9px; object-fit:contain; opacity:0.55; display:block; margin-top:12px;}
+.dm-toggle{
+  display:inline-flex; vertical-align:middle; margin-left:8px;
+  border:1px solid var(--border); border-radius:6px; overflow:hidden;
+}
+.dm-toggle .display-mode-btn{
+  padding:1px 7px; font-size:10.5px; border-radius:0; border:none;
+  gap:0; line-height:1.7;
+}
+.dm-toggle .display-mode-btn + .display-mode-btn{border-left:1px solid var(--border);}
+.dm-toggle-lg .display-mode-btn{padding:9px 14px; font-size:13.5px; font-weight:500;}
 
 /* ---------- MAIN ---------- */
 .main{flex:1; min-width:0; padding:26px 34px 60px;}
@@ -234,6 +244,28 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 .cal-day.cal-loss .cal-day-pnl{color:var(--red);}
 .cal-day.cal-loss .cal-day-num{color:var(--text-dim);}
 .cal-day.cal-outside{background:transparent; opacity:0.32;}
+
+/* --- P&L per orario (widget dashboard, nuovo widget separato) --- */
+.hour-grid{
+  display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:8px;
+}
+.hour-cell{
+  border-radius:8px; border:1px solid var(--border-soft); padding:9px 10px;
+  display:flex; flex-direction:column; justify-content:space-between; min-height:64px;
+  background:var(--bg-elevated,#0F1319);
+}
+.hour-cell-num{font-size:12px; color:var(--text-dim); text-align:right; font-weight:600; font-family:'IBM Plex Mono',monospace;}
+.hour-cell-info{display:flex; flex-direction:column; gap:1px;}
+.hour-cell-trades{font-size:11px; color:var(--text-dim);}
+.hour-cell-pnl{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;}
+.hour-cell.hour-win{background:var(--green-dim); border-color:rgba(51,196,139,0.3);}
+.hour-cell.hour-win .hour-cell-pnl{color:var(--green);}
+.hour-cell.hour-win .hour-cell-num{color:var(--text-dim);}
+.hour-cell.hour-loss{background:var(--red-dim); border-color:rgba(241,77,104,0.3);}
+.hour-cell.hour-loss .hour-cell-pnl{color:var(--red);}
+.hour-cell.hour-loss .hour-cell-num{color:var(--text-dim);}
+.hour-cell.hour-empty{opacity:0.32;}
+
 @media(max-width:640px){
   .cal-weekdays{gap:4px;}
   .cal-grid{gap:4px;}
@@ -242,6 +274,11 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
   .cal-day-trades{font-size:9.5px;}
   .cal-day-pnl{font-size:10.5px;}
   .cal-nav-label{font-size:11.5px;}
+  .hour-grid{grid-template-columns:repeat(4,1fr); gap:4px;}
+  .hour-cell{padding:6px 7px; min-height:52px;}
+  .hour-cell-num{font-size:11px;}
+  .hour-cell-trades{font-size:9.5px;}
+  .hour-cell-pnl{font-size:10.5px;}
 }
 .dash-widget.dw-placeholder{
   border:1.5px dashed var(--blue); background:var(--blue-dim); border-radius:var(--radius);
@@ -686,7 +723,12 @@ img, canvas, svg{max-width:100%;}
       </div>
     </div>
     <div class="sidebar-foot-rest">
-    Capitale: <b class="mono" id="sidebar-capital">—</b><br>
+    Capitale: <b class="mono" id="sidebar-capital">—</b>
+    <span class="dm-toggle" title="Mostra valori in valuta o in percentuale sul capitale iniziale">
+      <button type="button" class="btn display-mode-btn" data-mode="currency"><span class="dm-symbol">€</span></button>
+      <button type="button" class="btn display-mode-btn" data-mode="percent">%</button>
+    </span>
+    <br>
     <span id="user-email-label" style="color:var(--text-dim);"></span>
     &nbsp;·&nbsp;<a href="#" id="logout-btn" style="color:var(--text-dim); text-decoration:underline;">Esci</a><br>
     Sincronizzato nel cloud<br>
@@ -713,6 +755,10 @@ img, canvas, svg{max-width:100%;}
         <div class="page-title">Dashboard</div>
         <div class="page-sub">Panoramica performance e stato del conto</div>
       </div>
+      <span class="dm-toggle dm-toggle-lg" title="Mostra i valori in valuta o in percentuale sul capitale iniziale" style="align-self:center;">
+        <button type="button" class="btn display-mode-btn" data-mode="currency"><span class="dm-symbol">€</span> Valuta</button>
+        <button type="button" class="btn display-mode-btn" data-mode="percent">% Percentuale</button>
+      </span>
       <button class="btn btn-ghost" id="btn-export-dashboard-pdf">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v6M9 15l3-3 3 3"/></svg>
         Esporta report PDF
@@ -746,7 +792,7 @@ img, canvas, svg{max-width:100%;}
 
     <div class="dash-grid" id="dashboard-grid">
 
-      <div class="panel dash-widget" data-widget-id="equity" data-default-width="50" data-default-height="360">
+      <div class="panel dash-widget" data-widget-id="equity" data-default-width="100" data-default-height="360">
         <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="hero-equity">
           <div>
@@ -758,7 +804,7 @@ img, canvas, svg{max-width:100%;}
         <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
 
-      <div class="panel dash-widget" data-widget-id="calendar" data-default-width="100" data-default-height="560">
+      <div class="panel dash-widget" data-widget-id="calendar" data-default-width="50" data-default-height="560">
         <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head">
           <div>
@@ -790,29 +836,15 @@ img, canvas, svg{max-width:100%;}
         <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
 
-      <div class="panel dash-widget" data-widget-id="outcome" data-default-width="50" data-default-height="360">
-        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
-        <div class="panel-head"><div class="panel-title">Esito operazioni</div></div>
-        <div class="chart-wrap small"><canvas id="chart-outcome"></canvas></div>
-        <div id="outcome-legend" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
-        <div class="dash-resize-handle" title="Ridimensiona"></div>
-      </div>
-
-      <div class="panel dash-widget" data-widget-id="monthly" data-default-width="50" data-default-height="310">
+      <div class="panel dash-widget" data-widget-id="hourly" data-default-width="50" data-default-height="560">
         <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
         <div class="panel-head">
           <div>
-            <div class="panel-title">P&amp;L mensile</div>
+            <div class="panel-title">P&amp;L per Orario</div>
+            <div class="panel-title-sub">Risultato e numero di operazioni per ora di apertura (tutto lo storico)</div>
           </div>
         </div>
-        <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
-        <div class="dash-resize-handle" title="Ridimensiona"></div>
-      </div>
-
-      <div class="panel dash-widget" data-widget-id="drawdown" data-default-width="50" data-default-height="310">
-        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
-        <div class="panel-head"><div class="panel-title">Drawdown</div></div>
-        <div class="chart-wrap"><canvas id="chart-drawdown"></canvas></div>
+        <div class="hour-grid" id="hour-grid"></div>
         <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
 
@@ -829,6 +861,32 @@ img, canvas, svg{max-width:100%;}
           <span><i class="win"></i> Vincita</span>
           <span><i class="loss"></i> Perdita</span>
         </div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
+      </div>
+
+      <div class="panel dash-widget" data-widget-id="drawdown" data-default-width="33" data-default-height="310">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head"><div class="panel-title">Drawdown</div></div>
+        <div class="chart-wrap"><canvas id="chart-drawdown"></canvas></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
+      </div>
+
+      <div class="panel dash-widget" data-widget-id="outcome" data-default-width="33" data-default-height="360">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head"><div class="panel-title">Esito operazioni</div></div>
+        <div class="chart-wrap small"><canvas id="chart-outcome"></canvas></div>
+        <div id="outcome-legend" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
+        <div class="dash-resize-handle" title="Ridimensiona"></div>
+      </div>
+
+      <div class="panel dash-widget" data-widget-id="monthly" data-default-width="33" data-default-height="310">
+        <span class="dash-drag-handle" title="Trascina per riordinare">⠿</span>
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">P&amp;L mensile</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
         <div class="dash-resize-handle" title="Ridimensiona"></div>
       </div>
 
@@ -1379,6 +1437,14 @@ img, canvas, svg{max-width:100%;}
     <div style="display:flex; gap:8px; margin-bottom:14px;">
       <button type="button" class="btn btn-ghost" id="share-format-square" style="flex:1; justify-content:center;">Quadrato</button>
       <button type="button" class="btn btn-ghost" id="share-format-vertical" style="flex:1; justify-content:center;">Verticale</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <span style="font-size:12px; color:var(--text-dim);">Mostra valori in:</span>
+      <div style="display:flex; gap:8px; flex:1;">
+        <button type="button" class="btn btn-ghost" id="share-mode-currency" style="flex:1; justify-content:center;"><span class="dm-symbol">€</span> Valuta</button>
+        <button type="button" class="btn btn-ghost" id="share-mode-percent" style="flex:1; justify-content:center;">% Percentuale</button>
+      </div>
     </div>
 
     <div style="display:flex; gap:8px; margin-bottom:14px;">
