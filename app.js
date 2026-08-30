@@ -651,7 +651,15 @@ function renderBubbleChart() {
 
   if (BUBBLE_RAF_ID) { cancelAnimationFrame(BUBBLE_RAF_ID); BUBBLE_RAF_ID = null; }
 
-  const { wins, losses } = topWinsLosses(6);
+  // Usiamo lo stesso breakpoint mobile del resto dell'app (760px, vedi
+  // mobile-nav.js e i media query in index.html) invece di una soglia
+  // basata sulla sola larghezza dello stage: su molti telefoni lo stage
+  // resta comunque sopra i 400-450px (è largo quanto la card, non quanto
+  // lo schermo), quindi una soglia troppo stretta non scattava mai e le
+  // bolle restavano 12 anche su mobile.
+  const isMobile = window.matchMedia('(max-width:760px)').matches;
+  const topN = isMobile ? 3 : 6;
+  const { wins, losses } = topWinsLosses(topN);
   const items = [
     ...wins.map(t => ({ t, kind: 'win' })),
     ...losses.map(t => ({ t, kind: 'loss' })),
@@ -673,8 +681,16 @@ function renderBubbleChart() {
   const W = stage.clientWidth || 600;
   const H = stage.clientHeight || 380;
   const maxAbs = Math.max(...items.map(i => Math.abs(i.t.profit)));
-  const MIN_R = 40;
-  const MAX_R = Math.max(MIN_R + 10, Math.min(115, H / 2 - 12));
+  // Su mobile i raggi partono e arrivano più piccoli a prescindere da
+  // quanto sia larga in pixel la card, non solo in proporzione a W: con
+  // sole 6 bolle invece di 12 c'è già più spazio, ma le teniamo comunque
+  // compatte per lasciare margine alla fisica di separazione.
+  const MIN_R = isMobile
+    ? Math.max(20, Math.min(30, W / 13))
+    : Math.max(24, Math.min(40, W / 11));
+  const MAX_R = isMobile
+    ? Math.max(MIN_R + 8, Math.min(70, H / 2 - 12, W / 5.5))
+    : Math.max(MIN_R + 10, Math.min(115, H / 2 - 12, W / 4.3));
 
   // stato fisico di ogni bolla: posizione, raggio, velocità di deriva
   const bubbles = items.map(i => {

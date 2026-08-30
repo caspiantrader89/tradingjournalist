@@ -440,6 +440,11 @@ img, canvas, svg{max-width:100%;}
   body{flex-direction:column !important;}
   #app-shell{flex-direction:column !important;}
 
+  /* Stage delle bolle "Top vincite e perdite" più basso su mobile: con lo
+     stage stretto le bolle sono già più piccole (vedi renderBubbleChart in
+     app.js), quindi non serve tenere i 380px pensati per desktop. */
+  .bubble-stage{height:300px;}
+
   .sidebar{
     width:100% !important; height:auto !important; position:relative !important;
     flex-direction:column !important; overflow-x:visible !important; top:auto !important;
