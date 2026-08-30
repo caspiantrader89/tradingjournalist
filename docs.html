@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Guida all'uso — TradeJournalist</title>
+<style>
+:root{
+  --bg:#0A0D12; --surface:#141922; --surface-2:#191F2A; --border:#232B37; --border-soft:#1A212B;
+  --text:#E9EDF3; --text-dim:#8592A3; --text-faint:#4C5768; --green:#33C48B; --blue:#5B8CFF;
+  --amber:#E0A23C; --red:#F14D68; --radius:10px; font-size:15px;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html{background:#0A0D12 !important;}
+body{background:#0A0D12 !important; color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.65; min-height:100vh; position:relative;}
+.dark-canvas{position:fixed; inset:0; background:#0A0D12; z-index:-1;}
+.wrap{max-width:820px; margin:0 auto; padding:48px 24px 100px;}
+.back{display:inline-flex; align-items:center; gap:6px; color:var(--text-dim); text-decoration:none; font-size:13.5px; margin-bottom:22px;}
+.back:hover{color:var(--text);}
+.logo-row{margin-bottom:20px;}
+.logo-row img{height:20px; max-width:100%; width:auto; display:block;}
+h1{font-size:26px; margin-bottom:6px;}
+.subtitle{color:var(--text-dim); font-size:14.5px; margin-bottom:6px; max-width:640px;}
+.updated{color:var(--text-faint); font-size:13px; margin-bottom:34px;}
+h2{font-size:18px; margin:34px 0 10px; color:var(--text); border-top:1px solid var(--border-soft); padding-top:26px; scroll-margin-top:16px;}
+h2:first-of-type{border-top:none; padding-top:0; margin-top:0;}
+h3{font-size:15px; margin:22px 0 8px; color:var(--text); scroll-margin-top:16px;}
+p{color:var(--text-dim); margin-bottom:12px; font-size:14.5px;}
+ul, ol{margin:0 0 12px 22px; color:var(--text-dim); font-size:14.5px;}
+li{margin-bottom:6px;}
+strong{color:var(--text); font-weight:600;}
+code{background:var(--surface-2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:12.5px; color:var(--green); font-family:'SFMono-Regular',Consolas,monospace;}
+a{color:var(--blue);}
+table{width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:13.5px;}
+th, td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--border-soft); color:var(--text-dim); vertical-align:top;}
+th{color:var(--text); font-weight:600; background:var(--surface-2);}
+.box{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin:18px 0;}
+.tip{background:rgba(91,140,255,0.1); border:1px solid rgba(91,140,255,0.3); border-radius:var(--radius); padding:14px 18px; margin:16px 0; font-size:14px; color:var(--text-dim);}
+.tip strong{color:var(--blue);}
+.warn{background:rgba(224,162,60,0.1); border:1px solid rgba(224,162,60,0.35); border-radius:var(--radius); padding:14px 18px; margin:16px 0; font-size:14px; color:var(--text-dim);}
+.warn strong{color:var(--amber);}
+.toc{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 20px; margin-bottom:30px; columns:2; column-gap:24px;}
+.toc a{display:block; color:var(--text-dim); font-size:13px; padding:4px 0; text-decoration:none; break-inside:avoid;}
+.toc a:hover{color:var(--blue);}
+.steps{counter-reset:step; list-style:none; margin-left:0;}
+.steps li{counter-increment:step; position:relative; padding-left:34px; margin-bottom:12px; color:var(--text-dim); font-size:14.5px;}
+.steps li::before{content:counter(step); position:absolute; left:0; top:0; width:23px; height:23px; border-radius:50%; background:var(--surface-2); border:1px solid var(--border); color:var(--text); font-size:11.5px; font-weight:600; display:flex; align-items:center; justify-content:center;}
+.badge{display:inline-block; padding:2px 9px; border-radius:5px; font-size:11.5px; font-weight:600;}
+.badge-auto{background:rgba(51,196,139,0.14); color:var(--green);}
+.badge-manual{background:rgba(91,140,255,0.14); color:var(--blue);}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0;}
+.mini-card{background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px;}
+.mini-card .t{font-weight:600; color:var(--text); font-size:13.5px; margin-bottom:4px;}
+.mini-card .d{font-size:12.5px; color:var(--text-dim);}
+.site-footer{margin-top:60px; padding-top:22px; border-top:1px solid var(--border-soft);}
+.site-footer .flinks{display:flex; flex-wrap:wrap; gap:6px 18px; margin-bottom:14px;}
+.site-footer .flinks a{font-size:12.5px; color:var(--text-dim); text-decoration:none;}
+.site-footer .flinks a:hover{color:var(--blue);}
+.site-footer .fmeta{display:flex; align-items:center; gap:10px; color:var(--text-faint); font-size:11.5px;}
+.site-footer .fmeta img{height:11px; opacity:0.55;}
+@media(max-width:480px){
+  .grid-2{grid-template-columns:1fr;}
+  .toc{columns:1;}
+}
+</style>
+</head>
+<body>
+<div class="dark-canvas"></div>
+<div class="wrap">
+  <a class="back" href="index.html">&larr; Torna a TradeJournalist</a>
+
+  <div class="logo-row">
+    <img src="data:image/png;base64,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" alt="TradeJournalist">
+  </div>
+
+  <h1>Guida all'uso di TradeJournalist</h1>
+  <div class="subtitle">Il trading journal avanzato per registrare, analizzare e migliorare le tue operazioni — da MetaTrader agli exchange crypto.</div>
+  <div class="updated">Guida aggiornata al 29/08/2026</div>
+
+  <div class="toc">
+    <a href="#intro">Cos'è TradeJournalist</a>
+    <a href="#account">Account e accesso</a>
+    <a href="#conti">Conti multipli</a>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#nuovo-trade">Nuovo trade</a>
+    <a href="#registro">Registro operazioni</a>
+    <a href="#aperte">Posizioni aperte</a>
+    <a href="#strategie">Strategie</a>
+    <a href="#calcolatore">Calcolatore di posizione</a>
+    <a href="#conto">Conto</a>
+    <a href="#strumenti">Strumenti</a>
+    <a href="#import-generale">Come funziona l'import</a>
+    <a href="#import-metatrader">MetaTrader 4/5</a>
+    <a href="#import-bybit">Bybit</a>
+    <a href="#import-bitget">Bitget</a>
+    <a href="#import-mexc">MEXC</a>
+    <a href="#import-bingx">BingX</a>
+    <a href="#import-generico">Altri broker/exchange</a>
+    <a href="#import-riparazione">Riparare dati importati</a>
+    <a href="#condividi">Condividi risultati</a>
+    <a href="#pdf">Esportare in PDF</a>
+    <a href="#privacy">Privacy e dati</a>
+    <a href="#changelog">Changelog</a>
+    <a href="#faq">Domande frequenti</a>
+  </div>
+
+  <h2 id="intro">Cos'è TradeJournalist</h2>
+  <p>
+    TradeJournalist è un diario di trading web che ti permette di registrare ogni operazione (forex, indici,
+    metalli, materie prime, crypto, future, CFD, azioni), calcolarne automaticamente il risultato in base allo
+    strumento usato, e visualizzare le tue statistiche di performance in una dashboard interattiva.
+  </p>
+  <p>Puoi inserire i trade manualmente oppure importarli in blocco da un file, incluso lo storico esportato
+    direttamente da <strong>MetaTrader 4/5</strong> o dai principali <strong>exchange crypto</strong>
+    (Bybit, Bitget, MEXC, BingX), senza dover ricopiare nulla a mano.</p>
+  <div class="grid-2">
+    <div class="mini-card">
+      <div class="t">📊 Dashboard interattiva</div>
+      <div class="d">KPI, equity line, performance per strumento/strategia/giorno, tutto riordinabile e ridimensionabile.</div>
+    </div>
+    <div class="mini-card">
+      <div class="t">📥 Import automatico</div>
+      <div class="d">Riconosce da solo i report MetaTrader e gli export di Bybit, Bitget, MEXC, BingX.</div>
+    </div>
+    <div class="mini-card">
+      <div class="t">🧮 Calcolatore di posizione</div>
+      <div class="d">Calcola il lottaggio corretto in base a capitale, % di rischio e distanza dello stop.</div>
+    </div>
+    <div class="mini-card">
+      <div class="t">🗂️ Conti multipli</div>
+      <div class="d">Tieni separati più conti (es. "MT5 demo", "Bybit futures") e passa dall'uno all'altro.</div>
+    </div>
+  </div>
+  <div class="warn"><strong>Nota</strong> — TradeJournalist è uno strumento di registrazione e analisi personale.
+    Non costituisce consulenza finanziaria né raccomandazione di investimento.</div>
+
+  <h2 id="account">Account e accesso</h2>
+  <h3>Registrazione</h3>
+  <p>Dalla pagina di registrazione inserisci nome, cognome, email e password, seleziona paese, livello di
+    esperienza nel trading e come hai conosciuto il servizio, poi accetta Termini di Servizio e Informativa
+    Privacy (obbligatorio) — l'iscrizione alla newsletter è invece facoltativa.</p>
+  <p>Dopo la registrazione riceverai un'email di conferma: verifica il tuo indirizzo per sbloccare l'accesso
+    all'app. Puoi far reinviare l'email di verifica o controllarne lo stato dalla schermata che appare al primo
+    accesso.</p>
+  <h3>Login</h3>
+  <p>Accedi con email e password. Spunta <strong>"Ricordami"</strong> per restare collegato anche chiudendo il
+    browser; altrimenti la sessione dura fino alla chiusura della scheda. In caso di password dimenticata, usa il
+    link dedicato nella schermata di login: riceverai un'email per reimpostarla.</p>
+
+  <h2 id="conti">Conti multipli</h2>
+  <p>In fondo alla barra laterale dell'app trovi il selettore del conto attivo. Da lì puoi:</p>
+  <ul>
+    <li><strong>+ Nuovo conto</strong> — crea un conto separato (es. "MT5 demo", "Bybit futures", "Conto reale ICMarkets"). Ogni conto ha il proprio capitale, i propri strumenti, strategie, movimenti e operazioni.</li>
+    <li><strong>Rinomina</strong> — cambia il nome del conto attivo.</li>
+    <li><strong>Elimina</strong> — rimuove il conto selezionato e tutti i dati collegati (irreversibile).</li>
+  </ul>
+  <div class="tip"><strong>Suggerimento</strong> — usa un conto per ogni broker/exchange che utilizzi: le
+    statistiche di dashboard, registro e calcolatore restano sempre riferite solo al conto attivo.</div>
+
+  <h2 id="dashboard">Dashboard</h2>
+  <p>La dashboard è la schermata principale e riassume lo stato del conto attivo. I widget si possono
+    <strong>trascinare</strong> (maniglia ⠿) per riordinarli e <strong>ridimensionare</strong> dall'angolo in basso a destra.</p>
+  <h3>KPI principali</h3>
+  <table>
+    <tr><th>Indicatore</th><th>Cosa mostra</th></tr>
+    <tr><td>Capitale attuale</td><td>Capitale iniziale + depositi − prelievi + P&amp;L realizzato</td></tr>
+    <tr><td>P&amp;L totale</td><td>Somma dei profitti/perdite di tutte le operazioni chiuse</td></tr>
+    <tr><td>Win rate</td><td>% di operazioni in profitto sul totale delle chiuse (con dettaglio Win/Loss/BE)</td></tr>
+    <tr><td>R:R medio</td><td>Rapporto rischio/rendimento medio, calcolato in multipli di R</td></tr>
+    <tr><td>Drawdown max (gg)</td><td>Massimo calo del capitale registrato, calcolato su base giornaliera</td></tr>
+    <tr><td>Trade totali</td><td>Numero di operazioni registrate, con indicazione di quante sono ancora aperte</td></tr>
+  </table>
+  <h3>Grafici e tabelle disponibili</h3>
+  <ul>
+    <li><strong>Equity line</strong> — andamento del capitale nel tempo</li>
+    <li><strong>Performance per strumento</strong> — n° operazioni, win rate, esiti, rendimento e R:R per ogni strumento</li>
+    <li><strong>Performance per strategia</strong> — stessa analisi, raggruppata per strategia (incluso il completamento medio della checklist)</li>
+    <li><strong>Performance per giorno della settimana</strong> — P&amp;L totale in base al giorno di chiusura</li>
+    <li><strong>R:R — ultime 50 operazioni</strong> — andamento del multiplo R realizzato trade per trade</li>
+  </ul>
+  <div class="tip"><strong>I grafici non si vedono?</strong> — Se un blocker di script (adblock, Brave Shields o
+    rete offline) impedisce il caricamento di Chart.js, la dashboard mostra un avviso ma tabelle e statistiche
+    continuano a funzionare normalmente.</div>
+
+  <h2 id="nuovo-trade">Nuovo trade</h2>
+  <p>Apri <strong>Nuovo trade</strong> dalla barra laterale (o dal pulsante "Nuovo trade"/"Nuova posizione" in
+    Registro/Posizioni aperte) per inserire un'operazione manualmente.</p>
+  <table>
+    <tr><th>Campo</th><th>Descrizione</th></tr>
+    <tr><td>Direzione</td><td>BUY o SELL</td></tr>
+    <tr><td>Stato</td><td>Chiusa oppure Aperta (le posizioni aperte compaiono nella relativa sezione)</td></tr>
+    <tr><td>Strumento</td><td>Va scelto dall'anagrafica Strumenti — serve al calcolo automatico del profitto</td></tr>
+    <tr><td>Data apertura / Data chiusura</td><td>Data e ora dell'operazione</td></tr>
+    <tr><td>Lotti</td><td>Dimensione della posizione</td></tr>
+    <tr><td>Prezzo apertura / chiusura</td><td>Prezzi di entrata e uscita</td></tr>
+    <tr><td>Stop loss / Take profit</td><td>Prezzi di SL e TP, usati anche per calcolare il multiplo R</td></tr>
+    <tr><td>Prezzo attuale</td><td>Visibile solo per le posizioni aperte, per il P&amp;L non realizzato</td></tr>
+    <tr><td>Strategia</td><td>Testo libero con suggerimenti dalle strategie salvate</td></tr>
+    <tr><td>% rischio capitale</td><td>Percentuale di capitale rischiata sull'operazione</td></tr>
+    <tr><td>Profitto (€)</td><td>Puoi inserirlo a mano oppure premere <strong>Calcola</strong> per farlo calcolare in automatico da strumento, prezzi e lotti</td></tr>
+    <tr><td>R (multiplo rischio)</td><td>Calcolato automaticamente da entry/stop/exit</td></tr>
+    <tr><td>Flag colorato</td><td>Un'etichetta visiva (rosso, blu, verde, arancio, viola, celeste, rosa) per marcare i trade a colpo d'occhio</td></tr>
+    <tr><td>Link TradingView 1/2</td><td>Per allegare gli screenshot/analisi del setup</td></tr>
+    <tr><td>Checklist strategia</td><td>Se selezioni una strategia con checklist definita, compare qui da spuntare punto per punto</td></tr>
+    <tr><td>Note</td><td>Motivazione, contesto, cosa ha funzionato o no</td></tr>
+  </table>
+
+  <h2 id="registro">Registro operazioni</h2>
+  <p>Elenco completo di tutte le operazioni del conto attivo, con filtri per testo libero, strumento, stato
+    (chiuse/aperte), esito (Profit/Stop/BE) e strategia. Da qui puoi anche:</p>
+  <ul>
+    <li><strong>Esporta PDF</strong> — genera un report stampabile del registro filtrato</li>
+    <li><strong>Elimina tutte</strong> — cancella tutte le operazioni del conto (con conferma)</li>
+    <li>Modificare o eliminare ogni singolo trade dalla riga corrispondente</li>
+  </ul>
+
+  <h2 id="aperte">Posizioni aperte</h2>
+  <p>Mostra solo i trade con stato "Aperta": entry, prezzo attuale, SL/TP, giorni trascorsi e P&amp;L non
+    realizzato (calcolato in tempo reale in base al prezzo attuale inserito nel trade). Anche qui è disponibile
+    l'esportazione in PDF.</p>
+
+  <h2 id="strategie">Strategie</h2>
+  <p>Definisci le tue strategie operative per poi collegarle ai singoli trade e vederne le statistiche separate
+    in dashboard e registro. Per ogni strategia puoi impostare:</p>
+  <ul>
+    <li>Nome e descrizione</li>
+    <li>Bias (es. Trend following) e struttura (es. Rottura + retest)</li>
+    <li>Range di % di rischio e di R:R considerati validi</li>
+    <li>Fascia oraria operativa</li>
+    <li>Una <strong>checklist</strong> fino a 7 punti, da spuntare in fase di inserimento trade</li>
+    <li>Note preimpostate</li>
+  </ul>
+  <div class="tip">Se elimini una strategia, i trade collegati mantengono il nome come testo libero ma perdono
+    il riferimento alla checklist.</div>
+
+  <h2 id="calcolatore">Calcolatore di posizione</h2>
+  <p>Serve a dimensionare correttamente una nuova operazione in base al rischio che vuoi correre. Inserisci
+    strumento, direzione, capitale di riferimento, % di rischio per trade, prezzo di entrata, prezzo di stop e
+    (facoltativo) prezzo target: il calcolatore restituisce lottaggio consigliato, unità/contratti, rischio in €,
+    distanza dello stop in pip/tick, profitto potenziale al target e R:R stimato.</p>
+  <p>Con il pulsante <strong>"Usa questi valori nel nuovo trade"</strong> puoi passare direttamente i risultati
+    al form di inserimento trade, senza doverli ricopiare a mano.</p>
+
+  <h2 id="conto">Conto</h2>
+  <p>Qui gestisci il capitale del conto attivo:</p>
+  <ul>
+    <li><strong>Capitale iniziale</strong> e valuta (EUR, USD, GBP)</li>
+    <li><strong>Movimenti</strong> — registra depositi e prelievi con data, importo e note; il totale depositato/prelevato è mostrato in evidenza</li>
+  </ul>
+  <p>Il capitale attuale mostrato in dashboard è sempre: capitale iniziale + depositi − prelievi + P&amp;L
+    realizzato dai trade chiusi.</p>
+
+  <h2 id="strumenti">Strumenti</h2>
+  <p>L'anagrafica degli strumenti è ciò che permette a TradeJournalist di calcolare da solo il profitto di un
+    trade partendo da entry, exit e lottaggio. Per ogni strumento definisci:</p>
+  <table>
+    <tr><th>Campo</th><th>Descrizione</th></tr>
+    <tr><td>Nome</td><td>Es. EURUSD, XAUUSD, BTCUSDT</td></tr>
+    <tr><td>Categoria</td><td>Forex, Metalli, Indici, Materie prime, Crypto, Future, CFD, Azioni</td></tr>
+    <tr><td>Valuta</td><td>Valuta di quotazione</td></tr>
+    <tr><td>1 Pip/Tick</td><td>Dimensione minima di movimento del prezzo (es. 0.0001 per EURUSD)</td></tr>
+    <tr><td>Valore per 1 lotto per pip/tick</td><td>Quanto vale, in valuta, un pip/tick per un lotto intero</td></tr>
+    <tr><td>Dimensione contratto</td><td>Quante unità compone 1 lotto (es. 100.000 per un lotto standard forex)</td></tr>
+  </table>
+  <div class="tip">Quando importi un file da MetaTrader o da un exchange, se lo strumento non esiste ancora
+    viene creato automaticamente in anagrafica.</div>
+
+  <h2 id="import-generale">Importazione dati — come funziona</h2>
+  <p>Dalla sezione <strong>Importa CSV</strong> puoi trascinare o selezionare un file <code>.csv</code>,
+    <code>.xlsx</code> o <code>.xls</code>. TradeJournalist riconosce automaticamente alcuni formati molto
+    diffusi e, se non li riconosce, ti lascia mappare le colonne a mano.</p>
+  <p>
+    <span class="badge badge-auto">Riconoscimento automatico</span>
+    MetaTrader 4/5, Bybit, Bitget, MEXC, BingX &nbsp;·&nbsp;
+    <span class="badge badge-manual">Mappatura manuale</span>
+    qualunque altro CSV/Excel (broker, altro tool di journaling, foglio Excel personale...)
+  </p>
+  <p>Dopo aver caricato il file, se stai importando su un conto che contiene già delle operazioni, l'app chiede
+    come procedere:</p>
+  <ul>
+    <li><strong>Sostituisci</strong> — usalo quando il file è un export <em>completo e aggiornato</em> dello
+      storico del conto (tipico di MetaTrader): evita di duplicare operazioni e movimenti già presenti.</li>
+    <li><strong>Aggiungi</strong> — usalo quando il file contiene solo dati nuovi, mai importati prima.</li>
+  </ul>
+
+  <h2 id="import-metatrader">Import da MetaTrader 4/5</h2>
+  <p>Il modo più comodo per importare lo storico da MetaTrader è esportare il <strong>Rapporto</strong> in
+    formato Excel direttamente dal terminale:</p>
+  <ol class="steps">
+    <li>Apri MetaTrader e vai nella scheda <strong>Cronologia</strong> (o "Cronologia conto" / "Account History", in
+      basso nel terminale).</li>
+    <li>Fai clic destro sull'elenco e seleziona <strong>Tutto lo storico</strong> (per essere sicuro di
+      includere ogni operazione).</li>
+    <li>Fai di nuovo clic destro e scegli <strong>Rapporto</strong> (Report).</li>
+    <li>Nella finestra che si apre, seleziona <strong>Apri XML</strong> (Open XML): il rapporto verrà aperto/salvato
+      come file Excel (<code>.xlsx</code>).</li>
+    <li>Salva il file, poi caricalo nella sezione <strong>Importa CSV</strong> di TradeJournalist: verrà
+      riconosciuto automaticamente come "Report MetaTrader" e le posizioni verranno estratte in automatico.</li>
+  </ol>
+  <div class="tip"><strong>Perché "Tutto lo storico"</strong> — se esporti solo un intervallo di date rischi di
+    perdere operazioni più vecchie; l'opzione "Sostituisci" in fase di import funziona meglio con uno storico
+    completo, perché evita duplicati confrontando l'intero conto.</div>
+  <p>Dal report MetaTrader vengono importati anche i movimenti di <strong>deposito/prelievo</strong> registrati
+    nella sezione "Affari" del rapporto, così il capitale del conto resta coerente senza doverli inserire a mano.</p>
+
+  <h2 id="import-bybit">Import da Bybit</h2>
+  <p>TradeJournalist riconosce due tipi di export da Bybit:</p>
+  <div class="grid-2">
+    <div class="mini-card">
+      <div class="t">Asset Change Details</div>
+      <div class="d">Assets → Cronologia → Asset Change Details. Esporta come Excel: ogni riga è una singola esecuzione (fill); TradeJournalist ricostruisce da solo i trade completi.</div>
+    </div>
+    <div class="mini-card">
+      <div class="t">USDT-M Futures transactions</div>
+      <div class="d">Export delle transazioni futures USDT-M (formato condiviso con Bitget): riporta apertura/chiusura, direzione, profitto, fee e saldo.</div>
+    </div>
+  </div>
+
+  <h2 id="import-bitget">Import da Bitget</h2>
+  <p>Esporta lo storico delle transazioni <strong>USDT-M Futures</strong> dal tuo account Bitget (Assets →
+    Cronologia transazioni → Esporta) e carica il file <code>.xls</code>/<code>.xlsx</code> ottenuto: viene
+    riconosciuto automaticamente e le chiusure vengono ricostruite in trade completi con relativo saldo del conto.</p>
+
+  <h2 id="import-mexc">Import da MEXC</h2>
+  <p>Esporta la <strong>Futures Trade History</strong> dal tuo account MEXC. Come per Bybit, ogni riga
+    rappresenta una singola esecuzione (fill) e non un trade già aggregato: TradeJournalist ricostruisce da solo
+    apertura e chiusura di ogni posizione.</p>
+
+  <h2 id="import-bingx">Import da BingX</h2>
+  <p>Esporta lo storico delle posizioni futures da BingX e carica il file: viene riconosciuto automaticamente
+    con la stessa logica usata per MEXC e Bybit (ricostruzione dei trade a partire dai singoli fill).</p>
+
+  <h2 id="import-generico">Altri broker o exchange (CSV/Excel generico)</h2>
+  <p>Se il tuo broker o exchange non è tra quelli riconosciuti automaticamente, o se hai un tuo foglio Excel con
+    lo storico dei trade, puoi comunque importarlo:</p>
+  <ol class="steps">
+    <li>Assicurati che il file abbia la prima riga con le intestazioni delle colonne (CSV con virgola o
+      punto e virgola come separatore, oppure Excel).</li>
+    <li>Carica il file nella sezione Importa CSV.</li>
+    <li>Nella schermata <strong>"Mappa le colonne"</strong>, per ogni colonna del tuo file scegli a quale campo
+      di TradeJournalist corrisponde (strumento, direzione, data apertura, entry, exit, lotti, profitto, ecc.),
+      aiutandoti con l'anteprima dei dati mostrata in tabella.</li>
+    <li>Conferma l'import. La mappatura scelta viene ricordata per file con la stessa struttura di intestazioni,
+      così i prossimi import dallo stesso strumento saranno più rapidi.</li>
+  </ol>
+
+  <h2 id="import-riparazione">Riparare i dati dopo un import</h2>
+  <p>Dopo un'importazione l'app segnala automaticamente due situazioni comuni, ciascuna con un pulsante per
+    risolverla in un clic:</p>
+  <ul>
+    <li><strong>Operazioni senza data di chiusura valida</strong> — capita con date in formati non riconosciuti;
+      finché non vengono corrette non entrano in nessuna statistica. Puoi eliminarle e reimportare il file: il
+      parser riconosce sia il formato gg/mm/aaaa sia quello MetaTrader (aaaa.mm.gg).</li>
+    <li><strong>Operazioni chiuse senza profitto salvato</strong> — tipico di trade inseriti a mano senza premere
+      "Calcola profitto": TradeJournalist può ricalcolarli automaticamente da strumento, prezzi e lotti.</li>
+  </ul>
+
+  <h2 id="condividi">Condividi i risultati</h2>
+  <p>Dalla dashboard puoi generare una <strong>card riassuntiva</strong> delle tue prestazioni, pronta da
+    condividere sui social. Puoi scegliere il formato (quadrato o verticale), caricare un'immagine di sfondo
+    personalizzata e scaricare il risultato in PNG.</p>
+
+  <h2 id="pdf">Esportare in PDF</h2>
+  <p>Sono disponibili tre export PDF, sempre riferiti al conto attivo:</p>
+  <ul>
+    <li><strong>Report performance</strong> — sintesi generale con KPI, equity line e performance per strumento/strategia (disponibile dalla dashboard).</li>
+    <li><strong>Registro operazioni</strong> — l'elenco filtrato dei trade, dalla sezione Registro.</li>
+    <li><strong>Posizioni aperte</strong> — l'elenco delle posizioni ancora aperte, dalla sezione omonima.</li>
+  </ul>
+
+  <h2 id="privacy">Privacy e dati</h2>
+  <p>Dal menu account puoi aprire il pannello <strong>"Privacy e dati"</strong>, dove puoi in ogni momento:</p>
+  <ul>
+    <li><strong>Esportare i tuoi dati</strong> — scarica un file JSON con profilo, diario di trading e consenso cookie.</li>
+    <li><strong>Gestire il consenso al marketing</strong> — attiva o disattiva le comunicazioni promozionali via email.</li>
+    <li><strong>Gestire le preferenze cookie</strong> — richiama il banner dei cookie per rivedere le tue scelte.</li>
+    <li><strong>Eliminare l'account</strong> — cancella in modo permanente e irreversibile account e dati (richiede doppia conferma; per motivi di sicurezza potrebbe chiederti un login recente).</li>
+  </ul>
+  <p>Per i dettagli completi su titolare del trattamento, basi giuridiche e conservazione dei dati, consulta
+    l'Informativa Privacy e la Cookie Policy dell'app.</p>
+
+  <h2 id="changelog">Changelog</h2>
+  <p>La sezione <strong>Changelog</strong> nella barra laterale riporta la cronologia delle versioni dell'app,
+    utile per tenere traccia delle novità e delle correzioni introdotte nel tempo.</p>
+
+  <h2 id="faq">Domande frequenti</h2>
+  <h3>Il profitto di un trade non torna con quello reale del broker</h3>
+  <p>Controlla i parametri dello strumento in <strong>Strumenti</strong> (dimensione pip/tick, valore per lotto,
+    dimensione contratto): sono questi valori a determinare il calcolo automatico del profitto.</p>
+  <h3>Ho importato due volte lo stesso file e ora vedo trade doppi</h3>
+  <p>In fase di import scegli <strong>Sostituisci</strong> invece di "Aggiungi" quando il file è uno storico
+    completo aggiornato (tipico di MetaTrader): evita i duplicati confrontando l'intero conto.</p>
+  <h3>Posso usare TradeJournalist per più conti/broker contemporaneamente?</h3>
+  <p>Sì — crea un conto separato per ciascuno dalla barra laterale (vedi <a href="#conti">Conti multipli</a>):
+    ogni conto ha capitale, strumenti, strategie e operazioni indipendenti.</p>
+  <h3>Come cancello definitivamente i miei dati?</h3>
+  <p>Dal pannello <strong>Privacy e dati</strong>, pulsante "Elimina il mio account" — l'operazione è permanente
+    e non reversibile.</p>
+
+  <div class="site-footer">
+    <div class="flinks">
+      <a href="index.html">Torna a TradeJournalist</a>
+      <a href="termini.html">Termini e Condizioni</a>
+      <a href="privacy.html">Informativa Privacy</a>
+      <a href="cookie.html">Cookie Policy</a>
+    </div>
+    <div class="fmeta">
+      <img src="data:image/png;base64,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" alt="TradeJournalist">
+      <span>Guida generata per TradeJournalist.pro</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
