@@ -118,6 +118,23 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 .dm-toggle .display-mode-btn + .display-mode-btn{border-left:1px solid var(--border);}
 .dm-toggle-lg .display-mode-btn{padding:9px 14px; font-size:13.5px; font-weight:500;}
 
+.range-filter{
+  display:inline-flex; align-items:center; gap:7px; align-self:center;
+  padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);
+}
+.range-filter-all{padding:5px 10px; font-size:12.5px; border-radius:6px;}
+.range-filter-all.active{background:var(--green); border-color:var(--green); color:#06140E; font-weight:600;}
+.range-filter-sep{color:var(--text-faint); font-size:12px;}
+.range-filter-input{padding:5px 7px; font-size:12px; width:128px;}
+.range-filter-arrow{color:var(--text-faint); font-size:12px;}
+.dash-range-status{
+  font-size:12.5px; color:var(--text-dim); margin:-14px 0 14px; min-height:1px;
+}
+@media(max-width:760px){
+  .range-filter{flex-wrap:wrap;}
+  .range-filter-input{width:112px;}
+}
+
 /* ---------- MAIN ---------- */
 .main{flex:1; min-width:0; padding:26px 34px 60px;}
 .topbar{
@@ -222,10 +239,10 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 /* --- calendario P&L (widget dashboard) --- */
 .cal-nav{display:flex; align-items:center; gap:4px;}
 .cal-nav-label{font-size:12.5px; font-weight:600; text-align:center; color:var(--text-dim);}
-.cal-weekdays{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:2px;}
+.cal-weekdays{display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-top:2px;}
 .cal-weekdays div{font-size:11px; color:var(--text-faint); padding-left:2px; text-transform:uppercase; letter-spacing:.03em;}
 .cal-grid{
-  display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:8px;
+  display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-top:8px;
   flex:1 1 auto; grid-auto-rows:1fr;
 }
 .cal-day{
@@ -755,6 +772,13 @@ img, canvas, svg{max-width:100%;}
         <div class="page-title">Dashboard</div>
         <div class="page-sub">Panoramica performance e stato del conto</div>
       </div>
+      <span class="range-filter" id="dash-range-filter" title="Filtra la dashboard per periodo (in base alla data di chiusura delle operazioni)">
+        <button type="button" class="btn range-filter-all" id="dash-range-all-btn">Tutto</button>
+        <span class="range-filter-sep">·</span>
+        <input type="date" id="dash-range-from" class="range-filter-input" title="Da">
+        <span class="range-filter-arrow">→</span>
+        <input type="date" id="dash-range-to" class="range-filter-input" title="A">
+      </span>
       <span class="dm-toggle dm-toggle-lg" title="Mostra i valori in valuta o in percentuale sul capitale iniziale" style="align-self:center;">
         <button type="button" class="btn display-mode-btn" data-mode="currency"><span class="dm-symbol">€</span> Valuta</button>
         <button type="button" class="btn display-mode-btn" data-mode="percent">% Percentuale</button>
@@ -784,6 +808,7 @@ img, canvas, svg{max-width:100%;}
     <div class="dash-edit-hint" id="dashboard-edit-hint" style="display:none;">
       Modalità personalizzazione attiva — trascina <b>⠿</b> per riordinare i pannelli, trascina l'angolo <b>◢</b> in basso a destra per ridimensionarli.
     </div>
+    <div id="dash-range-status" class="dash-range-status"></div>
 
     <div class="stat-row" id="dash-stats"></div>
     <div id="chart-load-warning" style="display:none; margin-top:14px; padding:12px 16px; border:1px solid var(--danger, #F14D68); border-radius:10px; font-size:13px; color:var(--text-dim);">
@@ -830,7 +855,7 @@ img, canvas, svg{max-width:100%;}
           </div>
         </div>
         <div class="cal-weekdays">
-          <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div>
+          <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div>Sab</div><div>Dom</div>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
         <div class="dash-resize-handle" title="Ridimensiona"></div>

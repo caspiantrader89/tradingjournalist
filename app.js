@@ -261,6 +261,123 @@ function fmtLevelOrPercent(v) {
   return fmtMoney(v);
 }
 
+// Per il numero grande sopra il grafico "Equity line": in modalità percentuale
+// mostra quanto è cambiato il capitale DURANTE il periodo selezionato (rispetto
+// al capitale che si aveva all'inizio del periodo), non il rendimento assoluto
+// da sempre. Così se nel periodo scelto non è successo nulla mostra 0,00% —
+// coerente col grafico sotto, che in quel caso è piatto — invece del
+// rendimento storico totale del conto (che resta invece quello mostrato nella
+// card "Capitale attuale", che è intenzionalmente sempre riferita a tutto lo
+// storico).
+function fmtEquityHeadline(v) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  if (DISPLAY_MODE !== 'percent') return fmtMoney(v);
+  const base = dashboardRangeActive() ? dashboardEquityBaseline() : pctBase();
+  if (!base) return fmtMoney(v);
+  const pct = ((v - base) / base) * 100;
+  return (pct > 0 ? '+' : (pct < 0 ? '-' : '')) + fmtNum(Math.abs(pct), 2) + '%';
+}
+
+/* ---------------- dashboard: filtro per periodo (Tutto / range personalizzato) ----------------
+   Come DISPLAY_MODE, è una preferenza di visualizzazione pura (non tocca i
+   dati salvati): vive in localStorage, quindi è per browser/dispositivo.
+   Filtra SOLO i widget della dashboard (equity, calendario, orario, drawdown,
+   esito operazioni, P&L mensile, top vincite/perdite, per strumento/strategia,
+   giorno della settimana, R:R ultime 50) e il report PDF esportato da lì.
+   Il capitale attuale (sidebar, "Capitale attuale") resta sempre il vero
+   capitale ad oggi, non filtrato: un range nel passato non deve far sembrare
+   che il conto abbia un saldo diverso da quello reale.
+   ------------------------------------------------------------------------------- */
+const DASHBOARD_RANGE_KEY = 'tj_dashboard_range';
+let DASHBOARD_RANGE = { from: null, to: null };
+try {
+  const rawRange = localStorage.getItem(DASHBOARD_RANGE_KEY);
+  if (rawRange) {
+    const parsedRange = JSON.parse(rawRange);
+    DASHBOARD_RANGE = {
+      from: parsedRange.from ? new Date(parsedRange.from) : null,
+      to: parsedRange.to ? new Date(parsedRange.to) : null,
+    };
+    if (DASHBOARD_RANGE.from && isNaN(DASHBOARD_RANGE.from)) DASHBOARD_RANGE.from = null;
+    if (DASHBOARD_RANGE.to && isNaN(DASHBOARD_RANGE.to)) DASHBOARD_RANGE.to = null;
+  }
+} catch (e) { /* ignore, resta "Tutto" */ }
+
+function dashboardRangeActive() {
+  return !!(DASHBOARD_RANGE.from || DASHBOARD_RANGE.to);
+}
+
+function inDashboardRange(dateVal) {
+  if (!dashboardRangeActive()) return true;
+  const d = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
+  if (isNaN(d)) return false;
+  if (DASHBOARD_RANGE.from && d < DASHBOARD_RANGE.from) return false;
+  if (DASHBOARD_RANGE.to && d > DASHBOARD_RANGE.to) return false;
+  return true;
+}
+
+// operazioni chiuse rilevanti per il periodo selezionato nella dashboard
+// (in base alla data di CHIUSURA: è quando il P&L è realizzato ed entra a
+// far parte del risultato del periodo)
+function dashboardClosedTrades() {
+  return closedTrades().filter(t => inDashboardRange(t.closeDate));
+}
+
+function dashboardRangeLabel() {
+  if (!dashboardRangeActive()) return 'tutto lo storico';
+  const fmt = (d) => d ? d.toLocaleDateString('it-IT') : '…';
+  if (DASHBOARD_RANGE.from && DASHBOARD_RANGE.to) return `dal ${fmt(DASHBOARD_RANGE.from)} al ${fmt(DASHBOARD_RANGE.to)}`;
+  if (DASHBOARD_RANGE.from) return `dal ${fmt(DASHBOARD_RANGE.from)}`;
+  return `fino al ${fmt(DASHBOARD_RANGE.to)}`;
+}
+
+function saveDashboardRange() {
+  try {
+    localStorage.setItem(DASHBOARD_RANGE_KEY, JSON.stringify({
+      from: DASHBOARD_RANGE.from ? DASHBOARD_RANGE.from.toISOString() : null,
+      to: DASHBOARD_RANGE.to ? DASHBOARD_RANGE.to.toISOString() : null,
+    }));
+  } catch (e) { /* ignore */ }
+}
+
+function setDashboardRange(fromVal, toVal) {
+  let from = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+  let to = toVal ? new Date(toVal + 'T23:59:59.999') : null;
+  if (from && to && from > to) { const tmp = from; from = to; to = tmp; toast('Intervallo corretto: la data "da" era successiva alla data "a".'); }
+  DASHBOARD_RANGE = { from, to };
+  saveDashboardRange();
+  updateDashboardRangeUI();
+  renderDashboard();
+}
+
+function resetDashboardRange() {
+  DASHBOARD_RANGE = { from: null, to: null };
+  saveDashboardRange();
+  updateDashboardRangeUI();
+  renderDashboard();
+}
+
+function toDateInputValue(d) {
+  if (!d) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function updateDashboardRangeUI() {
+  const allBtn = document.getElementById('dash-range-all-btn');
+  const fromInput = document.getElementById('dash-range-from');
+  const toInput = document.getElementById('dash-range-to');
+  const status = document.getElementById('dash-range-status');
+  const active = dashboardRangeActive();
+  if (allBtn) allBtn.classList.toggle('active', !active);
+  if (fromInput) fromInput.value = toDateInputValue(DASHBOARD_RANGE.from);
+  if (toInput) toInput.value = toDateInputValue(DASHBOARD_RANGE.to);
+  if (status) status.textContent = active ? `Periodo: ${dashboardRangeLabel()}` : '';
+  // sottotitoli dei widget che dichiaravano esplicitamente "tutto lo storico"
+  const hourlySub = document.querySelector('[data-widget-id="hourly"] .panel-title-sub');
+  if (hourlySub) hourlySub.textContent = `Risultato e numero di operazioni per ora di apertura (${dashboardRangeLabel()})`;
+}
+
 function updateDisplayModeToggleUI() {
   updateCurrencySymbols();
   document.querySelectorAll('.display-mode-btn[data-mode]').forEach(btn => {
@@ -309,6 +426,17 @@ document.querySelectorAll('.display-mode-btn[data-mode]').forEach(btn => {
   btn.addEventListener('click', () => setDisplayMode(btn.dataset.mode));
 });
 updateDisplayModeToggleUI();
+
+(function initDashboardRangeControls() {
+  const allBtn = document.getElementById('dash-range-all-btn');
+  const fromInput = document.getElementById('dash-range-from');
+  const toInput = document.getElementById('dash-range-to');
+  if (allBtn) allBtn.addEventListener('click', resetDashboardRange);
+  const onDateChange = () => setDashboardRange(fromInput ? fromInput.value : '', toInput ? toInput.value : '');
+  if (fromInput) fromInput.addEventListener('change', onDateChange);
+  if (toInput) toInput.addEventListener('change', onDateChange);
+  updateDashboardRangeUI();
+})();
 function fmtDate(d) {
   if (!d) return '—';
   const dt = new Date(d);
@@ -402,6 +530,64 @@ function buildEquityCurve() {
   return points;
 }
 
+// Ledger filtrato per il periodo selezionato in dashboard: sia i trade sia i
+// movimenti di capitale (depositi/prelievi) fuori dal periodo sono esclusi.
+function buildDashboardLedger() {
+  const events = [];
+  STATE.movements.filter(m => inDashboardRange(m.date)).forEach(m => {
+    events.push({ date: new Date(m.date), delta: m.type === 'DEPOSIT' ? m.amount : -m.amount, kind: 'movement' });
+  });
+  dashboardClosedTrades().forEach(t => {
+    events.push({ date: new Date(t.closeDate), delta: (t.profit || 0), kind: 'trade' });
+  });
+  events.sort((a, b) => a.date - b.date);
+  return events;
+}
+
+// capitale di partenza del periodo selezionato: capitale iniziale + tutto
+// ciò che è successo PRIMA dell'inizio del range (così la curva/drawdown del
+// periodo partono dal punto corretto, non da zero né dal capitale iniziale
+// assoluto del conto)
+function dashboardEquityBaseline() {
+  if (!DASHBOARD_RANGE.from) return STATE.settings.initialCapital;
+  let running = STATE.settings.initialCapital;
+  buildLedger().forEach(e => { if (e.date < DASHBOARD_RANGE.from) running += e.delta; });
+  return running;
+}
+
+function buildDashboardEquityCurve() {
+  const events = buildDashboardLedger();
+  let running = dashboardEquityBaseline();
+  const points = [{ date: null, label: 'Start', equity: running }];
+  events.forEach(e => {
+    running += e.delta;
+    points.push({ date: e.date, label: fmtDateShort(e.date), equity: running });
+  });
+  return points;
+}
+
+function dashboardMaxDrawdown(groupBy) {
+  const pts = buildDashboardEquityCurve().filter(p => p.date);
+  if (!pts.length) return 0;
+  const map = new Map();
+  pts.forEach(p => {
+    const d = p.date;
+    const key = groupBy === 'month'
+      ? `${d.getFullYear()}-${d.getMonth()}`
+      : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    map.set(key, p.equity);
+  });
+  const values = Array.from(map.values());
+  values.unshift(dashboardEquityBaseline());
+  let peak = values[0], maxDd = 0;
+  values.forEach(v => {
+    if (v > peak) peak = v;
+    const dd = peak > 0 ? ((peak - v) / peak) * 100 : 0;
+    if (dd > maxDd) maxDd = dd;
+  });
+  return maxDd;
+}
+
 function currentCapital() {
   const pts = buildEquityCurve();
   return pts[pts.length - 1].equity;
@@ -449,9 +635,9 @@ function maxDrawdown(groupBy) {
   return maxDd;
 }
 
-function monthlyPL() {
+function monthlyPL(trades) {
   const map = new Map();
-  closedTrades().forEach(t => {
+  (trades || closedTrades()).forEach(t => {
     const d = new Date(t.closeDate);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     map.set(key, (map.get(key) || 0) + (t.profit || 0));
@@ -463,10 +649,11 @@ function monthlyPL() {
     }), values: keys.map(k => map.get(k)) };
 }
 
-function perInstrumentStats() {
-  const names = Array.from(new Set(closedTrades().map(t => t.instrument)));
+function perInstrumentStats(allTrades) {
+  const base = allTrades || closedTrades();
+  const names = Array.from(new Set(base.map(t => t.instrument)));
   return names.map(name => {
-    const trades = closedTrades().filter(t => t.instrument === name);
+    const trades = base.filter(t => t.instrument === name);
     const stats = winRateStats(trades);
     const rendimento = trades.reduce((s, t) => s + (t.profit || 0), 0);
     const rr = avgR(trades);
@@ -482,10 +669,11 @@ function checklistCompletionPct(t) {
   return (done / vals.length) * 100;
 }
 
-function perStrategyStats() {
-  const names = Array.from(new Set(closedTrades().map(t => t.strategy).filter(Boolean)));
+function perStrategyStats(allTrades) {
+  const base = allTrades || closedTrades();
+  const names = Array.from(new Set(base.map(t => t.strategy).filter(Boolean)));
   return names.map(name => {
-    const trades = closedTrades().filter(t => t.strategy === name);
+    const trades = base.filter(t => t.strategy === name);
     const stats = winRateStats(trades);
     const rendimento = trades.reduce((s, t) => s + (t.profit || 0), 0);
     const rr = avgR(trades);
@@ -495,10 +683,10 @@ function perStrategyStats() {
   }).sort((a, b) => b.rendimento - a.rendimento);
 }
 
-function weekdayPL() {
+function weekdayPL(trades) {
   const dayNames = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
   const totals = [0, 0, 0, 0, 0, 0, 0];
-  closedTrades().forEach(t => {
+  (trades || closedTrades()).forEach(t => {
     const d = new Date(t.closeDate);
     totals[d.getDay()] += (t.profit || 0);
   });
@@ -507,15 +695,15 @@ function weekdayPL() {
   return { labels: order.map(i => dayNames[i]), values: order.map(i => totals[i]) };
 }
 
-function topWinsLosses(n = 6) {
-  const trades = closedTrades().filter(t => t.profit !== null && t.profit !== undefined && t.profit !== 0);
+function topWinsLosses(n = 6, allTrades) {
+  const trades = (allTrades || closedTrades()).filter(t => t.profit !== null && t.profit !== undefined && t.profit !== 0);
   const wins = trades.filter(t => t.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, n);
   const losses = trades.filter(t => t.profit < 0).sort((a, b) => a.profit - b.profit).slice(0, n);
   return { wins, losses };
 }
 
-function lastNRValues(n) {
-  const trades = closedTrades().slice().sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate));
+function lastNRValues(n, allTrades) {
+  const trades = (allTrades || closedTrades()).slice().sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate));
   const last = trades.slice(-n);
   return last.map((t, idx) => ({ label: String(idx + 1), r: calcTradeR(t) })).filter(x => x.r !== null && isFinite(x.r));
 }
@@ -533,9 +721,9 @@ function calendarViewOrNow() {
 }
 
 // aggrega P&L e numero di trade per giorno di chiusura ('YYYY-MM-DD' -> {trades, pnl})
-function calendarDailyStats() {
+function calendarDailyStats(trades) {
   const map = {};
-  closedTrades().forEach(t => {
+  (trades || closedTrades()).forEach(t => {
     const d = new Date(t.closeDate);
     if (isNaN(d)) return;
     const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -571,7 +759,7 @@ function renderCalendarHeatmap() {
   monthLabel.textContent = CAL_MONTH_NAMES[m];
   yearLabel.textContent = String(y);
 
-  const stats = calendarDailyStats();
+  const stats = calendarDailyStats(dashboardClosedTrades());
   const lastOfMonth = new Date(y, m + 1, 0);
 
   // trova il lunedì di inizio griglia: il lunedì della settimana che contiene il giorno 1
@@ -580,15 +768,13 @@ function renderCalendarHeatmap() {
 
   const cells = [];
   const cursor = new Date(gridStart);
-  // avanza giorno per giorno (solo Lun-Ven) finché non abbiamo coperto il mese
-  // e completato l'ultima riga (multiplo di 5 celle)
-  while (cursor <= lastOfMonth || cells.length % 5 !== 0) {
-    const dow = cursor.getDay();
-    if (dow >= 1 && dow <= 5) {
-      const inMonth = cursor.getMonth() === m && cursor.getFullYear() === y;
-      const key = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
-      cells.push({ dayNum: cursor.getDate(), outside: !inMonth, data: inMonth ? (stats[key] || null) : null });
-    }
+  // avanza giorno per giorno (tutti e 7, non solo Lun-Ven: si fa trading anche
+  // di sabato/domenica su crypto) finché non abbiamo coperto il mese e
+  // completato l'ultima riga (multiplo di 7 celle)
+  while (cursor <= lastOfMonth || cells.length % 7 !== 0) {
+    const inMonth = cursor.getMonth() === m && cursor.getFullYear() === y;
+    const key = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
+    cells.push({ dayNum: cursor.getDate(), outside: !inMonth, data: inMonth ? (stats[key] || null) : null });
     cursor.setDate(cursor.getDate() + 1);
     if (cells.length > 60) break; // valvola di sicurezza anti-loop
   }
@@ -620,10 +806,10 @@ function renderCalendarHeatmap() {
 // orario corrispondente all'ingresso (openDate), mentre l'importo del P&L
 // resta ovviamente quello noto solo a chiusura (t.profit).
 // (a differenza del calendario, qui non c'è un mese da navigare: l'ora si ripete ogni giorno)
-function hourlyStats() {
+function hourlyStats(trades) {
   const map = {};
   for (let h = 0; h < 24; h++) map[h] = { trades: 0, pnl: 0 };
-  closedTrades().forEach(t => {
+  (trades || closedTrades()).forEach(t => {
     const d = new Date(t.openDate);
     if (isNaN(d)) return;
     const h = d.getHours();
@@ -637,7 +823,7 @@ function renderHourlyHeatmap() {
   const grid = document.getElementById('hour-grid');
   if (!grid) return;
 
-  const stats = hourlyStats();
+  const stats = hourlyStats(dashboardClosedTrades());
   const cells = [];
   for (let h = 0; h < 24; h++) {
     cells.push({ hour: h, data: stats[h].trades > 0 ? stats[h] : null });
@@ -684,22 +870,24 @@ function safeRender(name, fn) {
 
 function renderDashboard() {
   updateCurrencySymbols();
-  const cap = currentCapital();
-  const pl = totalPL();
-  const stats = winRateStats(closedTrades());
-  const rr = avgR(closedTrades());
-  const ddDay = maxDrawdown('day');
+  updateDashboardRangeUI();
+  const cap = currentCapital(); // capitale reale ad oggi: mai filtrato per periodo
+  const filteredTrades = dashboardClosedTrades();
+  const pl = filteredTrades.reduce((s, t) => s + (t.profit || 0), 0);
+  const stats = winRateStats(filteredTrades);
+  const rr = avgR(filteredTrades);
+  const ddDay = dashboardMaxDrawdown('day');
 
   document.getElementById('sidebar-capital').textContent = fmtLevelOrPercent(cap);
-  document.getElementById('hero-equity-num').textContent = fmtLevelOrPercent(cap);
+  document.getElementById('hero-equity-num').textContent = fmtEquityHeadline(cap);
 
   const chips = [
-    { label: 'Capitale attuale', value: fmtLevelOrPercent(cap), delta: null },
+    { label: 'Capitale attuale', value: fmtLevelOrPercent(cap), delta: dashboardRangeActive() ? 'da sempre, non filtrato per periodo' : null },
     { label: 'P&L totale', value: fmtMoneyOrPercent(pl, { signed: true }), cls: pl > 0 ? 'up' : (pl < 0 ? 'down' : 'flat') },
     { label: 'Win rate', value: stats.total ? fmtPct(stats.rate) : '—', delta: stats.total ? `${stats.wins}W / ${stats.losses}L / ${stats.be}BE` : 'nessun trade chiuso' },
     { label: 'R:R medio', value: rr !== null ? fmtNum(rr, 2) + 'R' : '—' },
     { label: 'Drawdown max (gg)', value: fmtPct(ddDay), cls: ddDay > 0 ? 'down' : 'flat' },
-    { label: 'Trade totali', value: String(STATE.trades.length), delta: `${openTrades().length} aperti` },
+    { label: 'Trade totali', value: String(filteredTrades.length + openTrades().length), delta: `${openTrades().length} aperti` },
   ];
   document.getElementById('dash-stats').innerHTML = chips.map(c => `
     <div class="stat-card">
@@ -733,7 +921,7 @@ function renderDashboard() {
 
 
 function renderEquityChart() {
-  const pts = buildEquityCurve();
+  const pts = buildDashboardEquityCurve();
   const labels = pts.map((p, i) => i === 0 ? 'Start' : p.label);
   const data = pts.map(p => p.equity);
   const ctx = document.getElementById('chart-equity').getContext('2d');
@@ -749,11 +937,11 @@ function renderEquityChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: {
         backgroundColor: '#151B24', borderColor: '#232B37', borderWidth: 1, titleColor: '#8592A3', bodyColor: '#E9EDF3', padding: 10, displayColors: false,
-        callbacks: { label: (c) => fmtLevelOrPercent(c.parsed.y) }
+        callbacks: { label: (c) => fmtEquityHeadline(c.parsed.y) }
       } },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#4C5768', maxTicksLimit: 8, font: { family: 'IBM Plex Mono', size: 10 } } },
-        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtLevelOrPercent(v) } }
+        y: { grid: { color: '#1A212B' }, ticks: { color: '#4C5768', font: { family: 'IBM Plex Mono', size: 10 }, callback: v => fmtEquityHeadline(v) } }
       },
       interaction: { intersect: false, mode: 'index' }
     }
@@ -784,7 +972,7 @@ function renderOutcomeChart(stats) {
 }
 
 function renderMonthlyChart() {
-  const { labels, values } = monthlyPL();
+  const { labels, values } = monthlyPL(dashboardClosedTrades());
   const ctx = document.getElementById('chart-monthly').getContext('2d');
   if (CHARTS.monthly) CHARTS.monthly.destroy();
   CHARTS.monthly = new Chart(ctx, {
@@ -802,8 +990,8 @@ function renderMonthlyChart() {
 }
 
 function renderDrawdownChart() {
-  const pts = buildEquityCurve().filter(p => p.date);
-  let peak = STATE.settings.initialCapital;
+  const pts = buildDashboardEquityCurve().filter(p => p.date);
+  let peak = dashboardEquityBaseline();
   const dd = pts.map(p => {
     if (p.equity > peak) peak = p.equity;
     return peak > 0 ? -((peak - p.equity) / peak) * 100 : 0;
@@ -829,7 +1017,7 @@ function renderDrawdownChart() {
 }
 
 function renderPerInstrumentTable() {
-  const rows = perInstrumentStats();
+  const rows = perInstrumentStats(dashboardClosedTrades());
   const tbody = document.getElementById('tbl-per-instrument');
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="8" class="txt" style="text-align:center; color:var(--text-faint); padding:24px;">Nessuna operazione chiusa ancora</td></tr>`;
@@ -850,7 +1038,7 @@ function renderPerInstrumentTable() {
 }
 
 function renderPerStrategyTable() {
-  const rows = perStrategyStats();
+  const rows = perStrategyStats(dashboardClosedTrades());
   const tbody = document.getElementById('tbl-per-strategy');
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="6" class="txt" style="text-align:center; color:var(--text-faint); padding:24px;">Nessuna operazione chiusa collegata a una strategia</td></tr>`;
@@ -869,7 +1057,7 @@ function renderPerStrategyTable() {
 }
 
 function renderWeekdayChart() {
-  const { labels, values } = weekdayPL();
+  const { labels, values } = weekdayPL(dashboardClosedTrades());
   const ctx = document.getElementById('chart-weekday').getContext('2d');
   if (CHARTS.weekday) CHARTS.weekday.destroy();
   CHARTS.weekday = new Chart(ctx, {
@@ -887,7 +1075,7 @@ function renderWeekdayChart() {
 }
 
 function renderR50Chart() {
-  const pts = lastNRValues(50);
+  const pts = lastNRValues(50, dashboardClosedTrades());
   const labels = pts.map(p => p.label);
   const values = pts.map(p => p.r);
   const ctx = document.getElementById('chart-r50').getContext('2d');
@@ -922,7 +1110,7 @@ function renderBubbleChart() {
   // bolle restavano 12 anche su mobile.
   const isMobile = window.matchMedia('(max-width:760px)').matches;
   const topN = isMobile ? 3 : 6;
-  const { wins, losses } = topWinsLosses(topN);
+  const { wins, losses } = topWinsLosses(topN, dashboardClosedTrades());
   const items = [
     ...wins.map(t => ({ t, kind: 'win' })),
     ...losses.map(t => ({ t, kind: 'loss' })),
@@ -3185,10 +3373,11 @@ function doPrint(html) {
 
 function exportDashboardPdf() {
   const cap = currentCapital();
-  const pl = totalPL();
-  const stats = winRateStats(closedTrades());
-  const rr = avgR(closedTrades());
-  const ddDay = maxDrawdown('day');
+  const filteredTrades = dashboardClosedTrades();
+  const pl = filteredTrades.reduce((s, t) => s + (t.profit || 0), 0);
+  const stats = winRateStats(filteredTrades);
+  const rr = avgR(filteredTrades);
+  const ddDay = dashboardMaxDrawdown('day');
 
   let chartImg = '';
   try {
@@ -3203,14 +3392,14 @@ function exportDashboardPdf() {
     { label: 'Win rate', value: stats.total ? fmtPct(stats.rate) : '—' },
     { label: 'R:R medio', value: rr !== null ? fmtNum(rr, 2) + 'R' : '—' },
     { label: 'Drawdown max (gg)', value: fmtPct(ddDay), cls: ddDay > 0 ? 'neg' : '' },
-    { label: 'Trade totali', value: String(STATE.trades.length) },
+    { label: 'Trade totali', value: String(filteredTrades.length + openTrades().length) },
   ];
 
-  const instrRows = perInstrumentStats();
-  const stratRows = perStrategyStats();
+  const instrRows = perInstrumentStats(filteredTrades);
+  const stratRows = perStrategyStats(filteredTrades);
 
   const html = `
-    ${printHeaderHtml('Report performance', 'Sintesi generale del conto e delle operazioni')}
+    ${printHeaderHtml('Report performance', `Sintesi generale del conto e delle operazioni — periodo: ${dashboardRangeLabel()}`)}
     <div class="pr-kpi-row">
       ${kpis.map(k => `<div class="pr-kpi"><div class="pr-kpi-label">${k.label}</div><div class="pr-kpi-value ${k.cls || ''}">${k.value}</div></div>`).join('')}
     </div>
