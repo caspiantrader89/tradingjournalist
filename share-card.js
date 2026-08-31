@@ -81,11 +81,15 @@
   }
 
   function computeShareData() {
-    const closed = (typeof closedTrades === 'function') ? closedTrades() : [];
+    // Usa i dati filtrati per il periodo selezionato in dashboard (le stesse
+    // funzioni "dashboardXxx" usate da renderDashboard): se il periodo è
+    // "Tutto" equivalgono ai dati assoluti, altrimenti riflettono solo il
+    // range di date scelto dall'utente.
+    const closed = (typeof dashboardClosedTrades === 'function') ? dashboardClosedTrades() : [];
     const stats = (typeof winRateStats === 'function') ? winRateStats(closed) : { rate: null };
-    const pnl = (typeof totalPL === 'function') ? totalPL() : 0;
-    const dd = (typeof maxDrawdown === 'function') ? maxDrawdown('day') : 0;
-    const equity = (typeof buildEquityCurve === 'function') ? buildEquityCurve().map(p => p.equity) : [];
+    const pnl = closed.reduce((s, t) => s + (t.profit || 0), 0);
+    const dd = (typeof dashboardMaxDrawdown === 'function') ? dashboardMaxDrawdown('day') : 0;
+    const equity = (typeof buildDashboardEquityCurve === 'function') ? buildDashboardEquityCurve().map(p => p.equity) : [];
     const { best, worst } = bestWorstTrade(closed);
     const period = computePeriod(closed);
     return { winRate: stats.rate, pnl, dd, equity, best, worst, period };
