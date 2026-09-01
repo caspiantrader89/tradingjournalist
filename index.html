@@ -243,7 +243,9 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 .cal-weekdays div{font-size:11px; color:var(--text-faint); padding-left:2px; text-transform:uppercase; letter-spacing:.03em;}
 .cal-grid{
   display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-top:8px;
-  flex:1 1 auto; grid-auto-rows:1fr;
+  flex:1 1 auto; grid-auto-rows:minmax(64px,1fr);
+  /* minmax invece di 1fr fisso: le righe possono crescere in altezza se il
+     testo P&L va a capo su due righe, invece di tagliare le cifre */
 }
 .cal-day{
   border-radius:8px; border:1px solid var(--border-soft); padding:9px 10px;
@@ -256,8 +258,8 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 }
 .cal-day-num{font-size:12px; color:var(--text-dim); text-align:right; font-weight:600;}
 .cal-day-info{display:flex; flex-direction:column; gap:1px; min-width:0;}
-.cal-day-trades{font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.cal-day-pnl{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.cal-day-trades{font-size:11px; color:var(--text-dim); overflow-wrap:anywhere;}
+.cal-day-pnl{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; overflow-wrap:anywhere; line-height:1.25;}
 .cal-day.cal-win{background:var(--green-dim); border-color:rgba(51,196,139,0.3);}
 .cal-day.cal-win .cal-day-pnl{color:var(--green);}
 .cal-day.cal-win .cal-day-num{color:var(--text-dim);}
@@ -278,8 +280,8 @@ input[type="number"]{font-family:'IBM Plex Mono',monospace;}
 }
 .hour-cell-num{font-size:12px; color:var(--text-dim); text-align:right; font-weight:600; font-family:'IBM Plex Mono',monospace;}
 .hour-cell-info{display:flex; flex-direction:column; gap:1px; min-width:0;}
-.hour-cell-trades{font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.hour-cell-pnl{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.hour-cell-trades{font-size:11px; color:var(--text-dim); overflow-wrap:anywhere;}
+.hour-cell-pnl{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; overflow-wrap:anywhere; line-height:1.25;}
 .hour-cell.hour-win{background:var(--green-dim); border-color:rgba(51,196,139,0.3);}
 .hour-cell.hour-win .hour-cell-pnl{color:var(--green);}
 .hour-cell.hour-win .hour-cell-num{color:var(--text-dim);}
