@@ -1869,52 +1869,89 @@ function guessMapping(header) {
 // esportato da MetaTrader/FTMO (.xlsx). L'ordine è sempre lo stesso:
 // Ora apertura | Posizione(id) | Simbolo | Tipo | Volume | Prezzo apertura |
 // S/L | T/P | Ora chiusura | Prezzo chiusura | Commissioni | Swap | Profitto
+// L'ultima colonna ("Nota") è usata solo dalle righe sintetiche di movimento
+// (depositi/prelievi/crediti) generate da extractMTMovements: sulle righe di
+// trade vere e proprie resta sempre vuota.
 const MT_POSITIONS_COLUMN_MAP = [
   'openDate', '', 'instrument', 'direction', 'lots', 'entryPrice',
-  'slPrice', 'tpPrice', 'closeDate', 'exitPrice', '', '', 'profit', 'initialCapital',
+  'slPrice', 'tpPrice', 'closeDate', 'exitPrice', '', '', 'profit', 'initialCapital', 'notes',
 ];
 const MT_POSITIONS_HEADER_LABELS = [
   'Apertura', 'Posizione', 'Simbolo', 'Tipo', 'Volume', 'Prezzo apertura',
   'S/L', 'T/P', 'Chiusura', 'Prezzo chiusura', 'Commissioni', 'Swap', 'Profitto',
-  'Saldo conto (dal file)',
+  'Saldo conto (dal file)', 'Nota',
 ];
 
-// Legge il saldo del conto dalla sezione "Affari" del report MetaTrader/FTMO,
-// che elenca ogni movimento (trade e depositi/prelievi "balance") con il
-// saldo PROGRESSIVO dopo ciascuno ("Bilancio"). Calcoliamo il saldo subito
-// PRIMA della prima riga presente nel file (saldo dopo meno l'impatto di
-// quella riga), così l'import può poi sommare trade e movimenti importati
-// e ritrovare da solo il saldo attuale — stessa logica usata per Bybit.
-// Colonne "Affari": Ora, Affare, Simbolo, Tipo, Direzione, Volume, Prezzo,
-// Ordine, Commissioni, Spese, Swap, Profitto, Bilancio, Commento.
-function extractMTInitialCapital(sheetRows) {
+const num = (v) => parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.'));
+
+// Trova l'inizio/fine della sezione "Affari" del report MetaTrader/FTMO, che
+// elenca OGNI movimento del conto (trade "buy"/"sell", depositi/prelievi
+// "balance", bonus/crediti "credit") con il saldo PROGRESSIVO dopo ciascuno
+// ("Bilancio"). Colonne: Ora, Affare, Simbolo, Tipo, Direzione, Volume,
+// Prezzo, Ordine, Commissioni, Spese, Swap, Profitto, Bilancio, Commento.
+function mtDealsRange(sheetRows) {
   const dealsIdx = sheetRows.findIndex(r => String(r[0] || '').trim().toLowerCase() === 'affari');
   if (dealsIdx === -1) return null;
   const dataStart = dealsIdx + 2; // salta la riga "Affari" e la riga di intestazione
-  const num = (v) => parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.'));
+  let dataEnd = sheetRows.length;
   for (let i = dataStart; i < sheetRows.length; i++) {
-    const row = sheetRows[i];
-    const firstCell = String(row[0] || '').trim().toLowerCase();
-    if (!firstCell || firstCell === 'posizioni aperte' || firstCell === 'risultati') break;
-    const balanceAfter = num(row[12]);
-    if (isNaN(balanceAfter)) continue;
-    const type = String(row[3] || '').trim().toLowerCase();
-    if (type === 'balance') {
-      // Deposito/prelievo esplicito (tipicamente il primo, es. "Initial account
-      // balance" di una challenge FTMO): il saldo DOPO questo movimento è il
-      // vero capitale di partenza del conto, non va sottratto.
-      return balanceAfter;
-    }
-    // Nessun deposito esplicito trovato: usiamo il saldo subito PRIMA di questa
-    // prima riga presente nel file (saldo dopo meno l'impatto del trade),
-    // così l'import può sommare i trade importati e ritrovare il saldo attuale.
-    const commission = num(row[8]) || 0;
-    const fee = num(row[9]) || 0;
-    const swap = num(row[10]) || 0;
-    const profit = num(row[11]) || 0;
-    return balanceAfter - commission - fee - swap - profit;
+    const firstCell = String(sheetRows[i][0] || '').trim().toLowerCase();
+    if (!firstCell || firstCell === 'posizioni aperte' || firstCell === 'risultati') { dataEnd = i; break; }
   }
-  return null;
+  return { dataStart, dataEnd };
+}
+
+// Calcola il vero capitale di partenza del conto: il saldo PRIMA della prima
+// riga della sezione "Affari" (saldo dopo quella riga meno il suo impatto:
+// commissioni + spese + swap + profitto/importo — questa somma vale sia per
+// un trade sia per un deposito/prelievo/credito, dato che su questi ultimi
+// commissioni/spese/swap sono sempre 0). Normalmente è 0, perché la prima
+// riga del file è già il primo deposito sul conto; tutti i depositi,
+// prelievi e crediti successivi vengono importati singolarmente come
+// movimenti da extractMTMovements, non più "assorbiti" in questo numero.
+function extractMTInitialCapital(sheetRows) {
+  const range = mtDealsRange(sheetRows);
+  if (!range) return null;
+  const row = sheetRows[range.dataStart];
+  if (!row) return null;
+  const balanceAfter = num(row[12]);
+  if (isNaN(balanceAfter)) return null;
+  const commission = num(row[8]) || 0;
+  const fee = num(row[9]) || 0;
+  const swap = num(row[10]) || 0;
+  const amount = num(row[11]) || 0;
+  return balanceAfter - commission - fee - swap - amount;
+}
+
+// Estrae TUTTI i movimenti di capitale (depositi, prelievi, crediti/bonus
+// del broker) dalla sezione "Affari": ogni riga con Tipo "balance" o
+// "credit" e un importo diverso da zero diventa una riga sintetica nel
+// formato a 15 colonne di MT_POSITIONS_COLUMN_MAP, con Tipo (colonna
+// "direction") forzato a "balance" così la pipeline di import generica
+// (isBalanceRow in runCsvImport) la riconosce e la smista come movimento
+// invece che come trade. Il segno dell'importo decide da solo se diventa un
+// Deposito o un Prelievo — nessuna gestione speciale necessaria per i
+// prelievi, bastano righe "balance" con Profitto negativo nel file.
+function extractMTMovements(sheetRows) {
+  const range = mtDealsRange(sheetRows);
+  if (!range) return [];
+  const movements = [];
+  for (let i = range.dataStart; i < range.dataEnd; i++) {
+    const row = sheetRows[i];
+    const type = String(row[3] || '').trim().toLowerCase();
+    if (type !== 'balance' && type !== 'credit') continue;
+    const amount = num(row[11]);
+    if (isNaN(amount) || amount === 0) continue;
+    const date = row[0] || '';
+    const note = String(row[13] || '').trim();
+    // Stesse 15 colonne di MT_POSITIONS_COLUMN_MAP: solo openDate/closeDate,
+    // direction, profit e notes sono valorizzate, il resto resta vuoto.
+    movements.push([
+      String(date).trim(), '', '', 'balance', '', '', '', '',
+      String(date).trim(), '', '', '', String(amount), '', note,
+    ]);
+  }
+  return movements;
 }
 
 // Riconosce il report MetaTrader/FTMO cercando la riga "Posizioni" e la riga
@@ -1938,10 +1975,16 @@ function extractMetaTraderPositions(sheetRows) {
   }
   if (!rows.length) return null;
 
-  const initialCapital = extractMTInitialCapital(sheetRows);
-  if (initialCapital !== null) rows[0][13] = String(initialCapital);
+  // Righe sintetiche di depositi/prelievi/crediti, in coda alle posizioni:
+  // vengono riconosciute e smistate come movimenti dalla pipeline di import
+  // generica (vedi isBalanceRow in runCsvImport), non come trade.
+  const movementRows = extractMTMovements(sheetRows);
+  const combined = rows.concat(movementRows);
 
-  return rows;
+  const initialCapital = extractMTInitialCapital(sheetRows);
+  if (initialCapital !== null) combined[0][13] = String(initialCapital);
+
+  return combined;
 }
 
 // Colonne del report "Export USDT-M Futures transactions" di Bitget/Bybit.
