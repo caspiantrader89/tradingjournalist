@@ -51,6 +51,17 @@ canvas{display:block;width:100%;height:480px;touch-action:none}
 .note{color:var(--mute);font-size:.85rem;margin-top:18px;max-width:80ch}
 button.i{width:18px;height:18px;border-radius:50%;padding:0;font-size:.7rem;line-height:1;background:transparent;border:1px solid var(--mute);color:var(--mute);font-weight:700;vertical-align:middle;margin-left:4px;cursor:help}
 .hint{margin:8px 0 0;font-size:.82rem;color:var(--mute);line-height:1.45;font-weight:400}
+.foot{max-width:1200px;margin:0 auto;padding:18px;border-top:1px solid var(--line);color:var(--mute);font-size:.85rem;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between}
+.foot nav{display:flex;flex-wrap:wrap;gap:6px 16px}
+button.l{background:none;border:0;padding:0;color:var(--mute);font-weight:400;text-decoration:underline;cursor:pointer;font-size:inherit}
+#ck{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:760px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:none;gap:10px 16px;align-items:center;flex-wrap:wrap;z-index:20;font-size:.88rem}
+#ck.on{display:flex}
+#ck p{margin:0;flex:1 1 320px}
+#ck button.l{color:var(--acc)}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:18px;max-width:660px;width:calc(100% - 32px);max-height:85vh;padding:22px;font:inherit}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{margin:0 0 10px;font-size:1.3rem}
+dialog p{margin:0 0 10px;font-size:.92rem;line-height:1.55}
 </style>
 </head>
 <body>
@@ -77,6 +88,9 @@ button.i{width:18px;height:18px;border-radius:50%;padding:0;font-size:.7rem;line
 </div>
 <p class="note">Con rischio in %, ogni trade rischia quella quota dell’equity corrente (capitalizzazione composta); con rischio in €, l’importo è fisso. L’istogramma a destra mostra come si distribuiscono i capitali finali delle linee. Kelly = p − (1 − p) / R.</p>
 </main>
+<footer class="foot"><span>© 2026 Multiverso · Strumento a scopo educativo</span><nav><button class="l" type="button" data-doc="privacy">Privacy</button><button class="l" type="button" data-doc="cookie">Cookie policy</button><button class="l" type="button" data-doc="disc">Disclaimer</button><button class="l" type="button" id="pref">Preferenze cookie</button></nav></footer>
+<div id="ck" role="region" aria-label="Informativa cookie"><p>Questo sito non usa cookie di profilazione né strumenti di tracciamento. Salviamo solo, nel tuo browser, la scelta che fai qui.</p><button class="l" type="button" data-doc="cookie">Cookie policy</button><button type="button" id="ckok">Ho capito</button></div>
+<dialog id="dl" aria-labelledby="dt"><h2 id="dt"></h2><div id="db"></div><button type="button" id="dx">Chiudi</button></dialog>
 <script>
 (function(){
 var $=function(i){return document.getElementById(i)},cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),S=null,G={},raf=0;
@@ -164,6 +178,14 @@ function later(){cancelAnimationFrame(raf);raf=requestAnimationFrame(sim)}
 ['eq','wp','rr','nt','nl','rk'].forEach(function(i){$(i).addEventListener('input',later)});
 $('ru').addEventListener('change',function(){var r=$('rk');if($('ru').value==='%'){r.min=.05;r.max=5;r.step=.05;r.value=.25}else{r.min=10;r.max=2000;r.step=10;r.value=250}later()});
 $('sc').addEventListener('change',function(){draw()});
+var DOC={privacy:["Informativa sulla privacy","<p><b>Titolare del trattamento:</b> [Nome e cognome o ragione sociale], [indirizzo], email: [indirizzo email].</p><p><b>Dati trattati.</b> Il sito non richiede registrazione e non raccoglie dati personali. I valori che inserisci nel simulatore vengono elaborati solo nel tuo browser e non vengono inviati a nessun server.</p><p><b>Dati tecnici.</b> Come per ogni sito, il fornitore di hosting può registrare dati tecnici di navigazione (ad esempio l’indirizzo IP) per sicurezza e funzionamento del servizio. Il sito carica inoltre il carattere tipografico da Google Fonts: per questo il tuo indirizzo IP può essere trasmesso a Google.</p><p><b>Base giuridica e conservazione.</b> Legittimo interesse al corretto funzionamento e alla sicurezza del sito (art. 6.1.f GDPR). I dati tecnici sono conservati per il tempo stabilito dal fornitore di hosting.</p><p><b>I tuoi diritti.</b> Puoi chiedere accesso, rettifica, cancellazione, limitazione, opposizione e portabilità dei dati (artt. 15–22 GDPR) scrivendo al contatto sopra. Puoi anche presentare reclamo al Garante per la protezione dei dati personali (garanteprivacy.it).</p><p>Ultimo aggiornamento: 27 novembre 2026.</p>"],cookie:["Cookie policy","<p><b>Cookie di profilazione o marketing:</b> nessuno.</p><p><b>Cookie di analisi o di terze parti:</b> nessuno.</p><p><b>Archiviazione locale.</b> Salviamo nel tuo browser un’unica informazione tecnica, cioè che hai letto questo avviso, così da non mostrartelo di nuovo. Non contiene dati personali e non viene inviata a nessuno.</p><p>Puoi riaprire l’avviso dal link “Preferenze cookie” nel footer, o cancellare i dati del sito dalle impostazioni del browser.</p><p>Ultimo aggiornamento: 27 novembre 2026.</p>"],disc:["Disclaimer","<p>Multiverso è uno strumento a scopo <b>educativo e informativo</b>. Le simulazioni sono generate casualmente a partire dai valori che inserisci e non rappresentano previsioni né risultati garantiti.</p><p>Il simulatore non tiene conto di commissioni, spread, slippage, tasse e di altri costi reali, e assume che winrate e rapporto rischio e rendimento restino costanti.</p><p>Nulla in questo sito è consulenza finanziaria, raccomandazione di investimento o sollecitazione all’acquisto o alla vendita di strumenti finanziari. Il trading comporta un rischio elevato e può portare alla perdita di tutto il capitale investito. Le performance passate o simulate non sono indicative di quelle future.</p>"]};
+function openDoc(k){$('dt').textContent=DOC[k][0];$('db').innerHTML=DOC[k][1];$('dl').showModal()}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-doc]');if(b)openDoc(b.dataset.doc)});
+$('dx').addEventListener('click',function(){$('dl').close()});
+function ck(on){$('ck').classList.toggle('on',on)}
+try{if(!localStorage.getItem('mv_ck'))ck(true)}catch(e){ck(true)}
+$('ckok').addEventListener('click',function(){try{localStorage.setItem('mv_ck','1')}catch(e){}ck(false)});
+$('pref').addEventListener('click',function(){ck(true)});
 $('rs').addEventListener('click',function(){var d={eq:100000,wp:44,rr:4,nt:600,nl:100};for(var k in d)$(k).value=d[k];var r=$('rk');$('ru').value='%';r.min=.05;r.max=5;r.step=.05;r.value=.25;$('sc').value='normal';document.querySelectorAll('.hint').forEach(function(h){h.remove()});labels();S=null;tip.style.display='none';ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);$('hero').innerHTML='<div class="k"><small>Nessun risultato</small><span>Imposta i valori e premi “Nuova simulazione”.</span></div>';$('stats').innerHTML=''});
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button.i');if(!b)return;var box=b.closest('.ctl,.k,.stats div');var h=box.querySelector('.hint');if(h){h.remove();b.setAttribute('aria-expanded','false');return}h=document.createElement('p');h.className='hint';h.textContent=b.dataset.t;box.appendChild(h);b.setAttribute('aria-expanded','true')});$('go').addEventListener('click',sim);
 $('th').addEventListener('click',function(){var d=document.documentElement,dark=css('--glow')==='1';d.setAttribute('data-theme',dark?'light':'dark');draw()});
