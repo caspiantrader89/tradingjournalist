@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Multiverso · simulatore di equity</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#f2f1ff;--panel:#fff;--ink:#14173a;--mute:#6a6f9a;--line:#dedcf5;--acc:#5b3df5;--plot:#fbfaff;--med:#14173a;--glow:0;--ok:#0b9b6b;--bad:#d6336c;
+--f:"Space Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#090b17;--panel:#121631;--ink:#eef0ff;--mute:#8d94c4;--line:#232850;--acc:#8b7bff;--plot:#0c0f22;--med:#fff;--glow:1;--ok:#3be8b0;--bad:#ff6b9d}}
+:root[data-theme="dark"]{--bg:#090b17;--panel:#121631;--ink:#eef0ff;--mute:#8d94c4;--line:#232850;--acc:#8b7bff;--plot:#0c0f22;--med:#fff;--glow:1;--ok:#3be8b0;--bad:#ff6b9d}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--f)}
+main{max-width:1200px;margin:0 auto;padding:28px 18px 40px}
+h1{font-size:clamp(1.8rem,4vw,2.8rem);line-height:1.05;margin:0 0 6px;letter-spacing:-.03em}
+.sub{margin:0 0 24px;color:var(--mute);max-width:60ch}
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+.k{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px 20px}
+.k small{color:var(--mute);display:block}
+.k strong{font-size:clamp(1.7rem,3.4vw,2.5rem);letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15}
+.k span{font-size:.85rem;color:var(--mute)}
+.pos{color:var(--ok)}.neg{color:var(--bad)}
+.wrap{display:grid;grid-template-columns:310px 1fr;gap:18px;align-items:start}
+@media(max-width:860px){.wrap{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.ctl{margin-bottom:16px}
+.ctl .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.ctl label{font-weight:500}
+output,.ctl input[type=number],select{font:inherit;font-variant-numeric:tabular-nums;color:var(--acc);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--acc);height:24px;margin:0}
+.ctl input[type=number],select{width:110px;background:transparent;border:1px solid var(--line);border-radius:10px;padding:4px 8px;text-align:right}
+select{width:auto;color:var(--ink)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:6px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-weight:700;border:0;border-radius:12px;padding:10px 16px;cursor:pointer;background:var(--acc);color:#fff}
+button.g{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+button:hover{filter:brightness(1.12)}
+.chart{position:relative;background:var(--plot);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+canvas{display:block;width:100%;height:480px;touch-action:none}
+@media(max-width:600px){canvas{height:380px}}
+#tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:.8rem;display:none;line-height:1.4;white-space:nowrap}
+.legend{display:flex;gap:16px;flex-wrap:wrap;padding:10px 4px 0;color:var(--mute);font-size:.82rem}
+.legend i{display:inline-block;width:22px;height:4px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:14px}
+.stats div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+.stats small{display:block;color:var(--mute);font-size:.78rem}
+.stats b{font-variant-numeric:tabular-nums}
+.note{color:var(--mute);font-size:.85rem;margin-top:18px;max-width:80ch}
+button.i{width:18px;height:18px;border-radius:50%;padding:0;font-size:.7rem;line-height:1;background:transparent;border:1px solid var(--mute);color:var(--mute);font-weight:700;vertical-align:middle;margin-left:4px;cursor:help}
+.hint{margin:8px 0 0;font-size:.82rem;color:var(--mute);line-height:1.45;font-weight:400}
+</style>
+</head>
+<body>
+<main>
+<h1>Multiverso</h1>
+<p class="sub">Questo simulatore calcola i possibili scenari della tua curva di equity. Cambia i valori in base al tuo stile di trading e guarda subito cosa può succedere.</p>
+<section class="hero" aria-live="polite" id="hero"></section>
+<div class="wrap">
+<div class="panel">
+<div class="ctl"><div class="t"><label for="eq">Capitale iniziale (€) <button type="button" class="i" aria-label="Spiegazione" data-t="Il capitale con cui parte ogni linea simulata.">i</button></label><input id="eq" type="number" value="100000" min="1"></div></div>
+<div class="ctl"><div class="t"><label for="wp">Probabilità di vincita <button type="button" class="i" aria-label="Spiegazione" data-t="Su 100 trade, quanti in media chiudono in guadagno. Con 44% ne vincono circa 44 e ne perdono 56.">i</button></label><output id="wpo"></output></div><input id="wp" type="range" min="1" max="99" step="0.5" value="44"></div>
+<div class="ctl"><div class="t"><label for="rr">Rapporto vincita : perdita <button type="button" class="i" aria-label="Spiegazione" data-t="Quanto guadagni su un trade vincente rispetto a quanto perdi su uno perdente. Con 4:1, se rischi 100 € ne guadagni 400 quando vinci.">i</button></label><output id="rro"></output></div><input id="rr" type="range" min="0.2" max="10" step="0.1" value="4"></div>
+<div class="ctl"><div class="t"><label for="nt">Numero di trade <button type="button" class="i" aria-label="Spiegazione" data-t="Quanti trade esegue ogni linea. Più trade ci sono, più il risultato si avvicina a quello atteso dalla strategia.">i</button></label><output id="nto"></output></div><input id="nt" type="range" min="50" max="2000" step="50" value="600"></div>
+<div class="ctl"><div class="t"><label for="nl">Numero di scenari <button type="button" class="i" aria-label="Spiegazione" data-t="Quante simulazioni diverse fare. Non sono variabili: ogni scenario è una possibile storia del tuo trading, con gli stessi parametri ma un’altra sequenza di vincite e perdite, ed è disegnata come una linea nel grafico.">i</button></label><output id="nlo"></output></div><input id="nl" type="range" min="10" max="300" step="10" value="100"></div>
+<div class="ctl"><div class="t"><label for="rk">Rischio per trade <button type="button" class="i" aria-label="Spiegazione" data-t="Quanto metti in gioco a ogni trade: in % significa una quota del capitale di quel momento (il rischio cresce quando guadagni e cala quando perdi), in € è un importo fisso.">i</button></label><span><output id="rko"></output> <select id="ru" aria-label="Unità"><option value="%">%</option><option value="€">€</option></select></span></div><input id="rk" type="range" min="0.05" max="5" step="0.05" value="0.25"></div>
+<div class="ctl"><div class="t"><label for="sc">Scala <button type="button" class="i" aria-label="Spiegazione" data-t="Normale: l’asse verticale è lineare. Logaritmica: ogni passo rappresenta la stessa crescita in percentuale, utile quando il capitale cresce molto.">i</button></label><select id="sc"><option value="normal">normale</option><option value="log">logaritmica</option></select></div></div>
+<div class="btns"><button id="go" type="button">Nuova simulazione</button><button class="g" id="rs" type="button">Ripristina valori</button><button class="g" id="th" type="button">Tema</button></div>
+</div>
+<div>
+<div class="chart"><canvas id="cv" role="img" aria-label="Curve di equity simulate e distribuzione dei risultati finali"></canvas><div id="tip"></div></div>
+<div class="legend"><span><i style="background:linear-gradient(90deg,#2ee6ff,#a35bff,#ff4fa3)"></i>ogni linea, colorata per risultato finale</span><span><i style="background:var(--med)"></i>media</span><span><i style="background:var(--acc);opacity:.35"></i>fascia 5°–95° percentile</span></div>
+<div class="stats" id="stats"></div>
+</div>
+</div>
+<p class="note">Con rischio in %, ogni trade rischia quella quota dell’equity corrente (capitalizzazione composta); con rischio in €, l’importo è fisso. L’istogramma a destra mostra come si distribuiscono i capitali finali delle linee. Kelly = p − (1 − p) / R.</p>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)},cv=$('cv'),ctx=cv.getContext('2d'),tip=$('tip'),S=null,G={},raf=0;
+var fmt=function(n,d){return n.toLocaleString('it-IT',{maximumFractionDigits:d||0,minimumFractionDigits:d||0})};
+var css=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()};
+function labels(){$('wpo').textContent=$('wp').value+' %';$('rro').textContent=$('rr').value+' : 1';$('nto').textContent=$('nt').value;$('nlo').textContent=$('nl').value;$('rko').textContent=fmt(+$('rk').value,2)}
+function sim(){
+  labels();
+  var P={eq:Math.max(1,+$('eq').value||1e5),p:+$('wp').value/100,r:+$('rr').value,n:+$('nt').value,L:+$('nl').value,risk:+$('rk').value,pct:$('ru').value==='%'};
+  var lines=[],mean=new Float64Array(P.n+1),bigDD=0,bigDDe=0,sumDD=0,minE=1/0,maxE=-1/0,sumF=0,maxW=0,maxL=0,loss=0;
+  for(var l=0;l<P.L;l++){
+    var a=new Float64Array(P.n+1),e=P.eq,pk=e,dd=0,dde=0,w=0,lo=0;a[0]=e;mean[0]+=e/P.L;
+    for(var t=1;t<=P.n;t++){
+      var rs=P.pct?e*P.risk/100:P.risk;
+      if(Math.random()<P.p){e+=rs*P.r;w++;lo=0;if(w>maxW)maxW=w}else{e-=rs;lo++;w=0;if(lo>maxL)maxL=lo}
+      if(e<0)e=0;a[t]=e;mean[t]+=e/P.L;if(e>pk)pk=e;
+      var d=pk>0?(pk-e)/pk:0;if(d>dd){dd=d;dde=pk-e}
+      if(e<minE)minE=e;if(e>maxE)maxE=e;
+    }
+    sumDD+=dd;sumF+=e;if(e<P.eq)loss++;if(dd>bigDD){bigDD=dd;bigDDe=dde}lines.push(a);
+  }
+  lines.sort(function(x,y){return x[P.n]-y[P.n]});
+  var k=Math.max(1,Math.floor(P.n/400)),lo5=[],hi5=[],lo95=0;
+  for(var t2=0;t2<=P.n;t2+=k){var v=lines.map(function(x){return x[t2]}).sort(function(a,b){return a-b});
+    lo5.push(v[Math.floor(.05*(v.length-1))]);hi5.push(v[Math.ceil(.95*(v.length-1))])}
+  var avgF=sumF/P.L,perf=(avgF/P.eq-1)*100;
+  S={P:P,lines:lines,mean:mean,k:k,lo5:lo5,hi5:hi5,kelly:P.p-(1-P.p)/P.r,exp:P.p*P.r-(1-P.p),bigDD:bigDD,bigDDe:bigDDe,avgDD:sumDD/P.L,minE:minE,maxE:maxE,perf:perf,perfE:avgF-P.eq,
+    rodd:bigDDe>0?perf/(bigDDe/P.eq*100):null,maxW:maxW,maxL:maxL,loss:loss/P.L,med:lines[Math.floor(P.L/2)][P.n]};
+  info();draw();
+}
+var I=function(t){return '<button type="button" class="i" aria-label="Spiegazione" data-t="'+t+'">i</button>'};
+function info(){
+  var s=S;
+  $('hero').innerHTML='<div class="k"><small>Capitale finale medio '+I('La media dei capitali finali di tutte le linee simulate. È il risultato tipico, ma ogni singola linea può finire molto sopra o molto sotto.')+'</small><strong>'+fmt(s.perfE+s.P.eq)+' €</strong><br><span class="'+(s.perf>=0?'pos':'neg')+'">'+(s.perf>=0?'+':'')+fmt(s.perf,1)+'% sul capitale iniziale</span></div>'+
+  '<div class="k"><small>Probabilità di chiudere in perdita '+I('La percentuale di linee che alla fine hanno meno del capitale iniziale. Più è bassa, più la strategia è affidabile.')+'</small><strong class="'+(s.loss>.2?'neg':'pos')+'">'+fmt(s.loss*100,0)+'%</strong><br><span>su '+s.P.L+' simulazioni</span></div>'+
+  '<div class="k"><small>Drawdown peggiore '+I('Il calo più forte dal massimo precedente raggiunto da una linea, in % e in €. Dice quanto devi saper sopportare lungo il percorso. Il valore medio è la media dei cali massimi di tutte le linee.')+'</small><strong>'+fmt(s.bigDD*100,1)+'%</strong><br><span>'+fmt(s.bigDDe)+' € · medio '+fmt(s.avgDD*100,1)+'%</span></div>';
+  var r=[['Kelly',fmt(s.kelly,2),'Il Kelly è la frazione di capitale che, in teoria, conviene rischiare a ogni trade per far crescere il capitale il più in fretta possibile nel lungo periodo. Si calcola come p − (1 − p) / R (p = probabilità di vincita, R = rapporto vincita:perdita). Con 0,30 significa 30%. Rischiare più del Kelly aumenta il rischio senza far crescere meglio il capitale, quindi nella pratica si usa una frazione molto più piccola. Se è negativo o zero, la strategia perde nel lungo periodo.'],['Aspettativa',fmt(s.exp,2),'Guadagno medio per ogni unità di rischio. Con 1,20 ogni 100 € rischiati ti aspetti in media 120 € di guadagno. Sopra zero la strategia è vincente nel lungo periodo.'],['Performance media',fmt(s.perf,1)+'% ('+fmt(s.perfE)+' €)','Il guadagno medio di tutti gli scenari a fine simulazione, in % e in € rispetto al capitale iniziale.'],['Equity minima',fmt(s.minE)+' €','Il valore più basso toccato dal capitale da una qualsiasi linea, in tutta la simulazione.'],['Equity massima',fmt(s.maxE)+' €','Il valore più alto raggiunto dal capitale da una qualsiasi linea. È il caso più fortunato.'],['Rendimento su max drawdown',s.rodd==null?'n/d':fmt(s.rodd,1),'Quanto guadagni rispetto a quanto hai sofferto: la performance media divisa per il drawdown peggiore. Più è alto, meglio si è ripagato il rischio.'],['Max vincite consecutive',s.maxW,'La serie più lunga di trade vincenti di fila trovata in tutte le linee.'],['Max perdite consecutive',s.maxL,'La serie più lunga di trade perdenti di fila trovata in tutte le linee. Serve a capire quanto può durare una brutta fase anche con una buona strategia.'],['Risultato mediano',fmt(s.med)+' €','Il capitale finale della linea di mezzo: metà delle linee finisce sopra, metà sotto. Meno influenzato dai casi estremi della media.']];
+  $('stats').innerHTML=r.map(function(x){return '<div><small>'+x[0]+' '+I(x[2])+'</small><b>'+x[1]+'</b></div>'}).join('');
+}
+function step(range,c){var raw=range/c,m=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/m;return(f<1.5?1:f<3?2:f<7?5:10)*m}
+function draw(ht){
+  if(!S)return;
+  var dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  var hw=Math.min(90,W*.16),m={l:62,r:hw+16,t:14,b:36},pw=W-m.l-m.r,ph=H-m.t-m.b,n=S.P.n,log=$('sc').value==='log',glow=css('--glow')==='1';
+  var lo=log?Math.max(1,Math.min(S.minE,S.P.eq)):0,hi=Math.max(S.maxE,S.P.eq)*1.03,st=step(hi-lo,5);
+  if(!log)hi=Math.ceil(hi/st)*st;
+  var X=function(t){return m.l+t/n*pw},Y=function(v){if(log){v=Math.max(v,lo);return m.t+ph-(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo))*ph}return m.t+ph-(v-lo)/(hi-lo)*ph};
+  G={m:m,pw:pw,X:X,W:W};
+  ctx.font='11px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle=css('--mute');ctx.strokeStyle=css('--line');ctx.lineWidth=1;
+  var tk=[];if(log){for(var v=Math.pow(10,Math.floor(Math.log10(lo)));v<=hi;v*=10)[1,2,5].forEach(function(q){if(v*q>=lo&&v*q<=hi)tk.push(v*q)})}else for(var u=lo;u<=hi+1e-9;u+=st)tk.push(u);
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  tk.forEach(function(v){var y=Math.round(Y(v))+.5;ctx.beginPath();ctx.moveTo(m.l,y);ctx.lineTo(m.l+pw,y);ctx.stroke();ctx.fillText(v>=1e6?fmt(v/1e6,1)+' M':v>=1e3?fmt(v/1e3)+' k':fmt(v),m.l-8,y)});
+  ctx.textAlign='center';ctx.textBaseline='top';var xs=step(n,6);
+  for(var t=0;t<=n;t+=xs)ctx.fillText(fmt(t),X(t),m.t+ph+8);
+  ctx.fillText('# trade',m.l+pw/2,m.t+ph+22);
+  ctx.setLineDash([5,4]);var y0=Y(S.P.eq);ctx.beginPath();ctx.moveTo(m.l,y0);ctx.lineTo(m.l+pw,y0);ctx.strokeStyle=css('--mute');ctx.stroke();ctx.setLineDash([]);
+  ctx.save();ctx.beginPath();ctx.rect(m.l,m.t,pw,ph);ctx.clip();
+  // fascia percentile
+  ctx.fillStyle=css('--acc');ctx.globalAlpha=.13;ctx.beginPath();
+  S.lo5.forEach(function(v,i){var x=X(i*S.k),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  for(var i=S.hi5.length-1;i>=0;i--)ctx.lineTo(X(i*S.k),Y(S.hi5[i]));
+  ctx.fill();
+  if(glow)ctx.globalCompositeOperation='lighter';
+  var L=S.lines.length;ctx.lineWidth=glow?1.3:1.2;ctx.globalAlpha=glow?.5:.55;
+  S.lines.forEach(function(a,j){ctx.strokeStyle='hsl('+(188+j/Math.max(1,L-1)*150)+','+(glow?95:80)+'%,'+(glow?60:50)+'%)';ctx.beginPath();
+    for(var t=0;t<=n;t+=S.k){var px=X(t),py=Y(a[t]);t?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.stroke()});
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.strokeStyle=css('--med');ctx.lineWidth=2.6;ctx.beginPath();
+  for(var t3=0;t3<=n;t3+=S.k){var qx=X(t3),qy=Y(S.mean[t3]);t3?ctx.lineTo(qx,qy):ctx.moveTo(qx,qy)}ctx.stroke();
+  if(ht!=null){var hx=X(ht);ctx.strokeStyle=css('--mute');ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(hx,m.t);ctx.lineTo(hx,m.t+ph);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=css('--med');ctx.beginPath();ctx.arc(hx,Y(S.mean[ht]),4.5,0,7);ctx.fill()}
+  ctx.restore();
+  // istogramma finali
+  var B=22,bins=new Array(B).fill(0),fin=S.lines.map(function(a){return a[n]}),mn=Math.min.apply(0,fin),mx=Math.max.apply(0,fin),bw=(mx-mn)/B||1;
+  fin.forEach(function(v){bins[Math.min(B-1,Math.floor((v-mn)/bw))]++});var mb=Math.max.apply(0,bins),x0=m.l+pw+12;
+  bins.forEach(function(c,i){var ya=Y(mn+i*bw),yb=Y(mn+(i+1)*bw),w=c/mb*(hw-8);ctx.fillStyle='hsl('+(188+i/(B-1)*150)+',85%,'+(glow?62:52)+'%)';ctx.globalAlpha=.85;ctx.fillRect(x0,yb+1,w,Math.max(1,ya-yb-2));ctx.globalAlpha=1});
+  ctx.fillStyle=css('--mute');ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText('finali',x0,m.t+ph+8);
+}
+function hv(ev){if(!S)return;var rc=cv.getBoundingClientRect(),t=Math.round((ev.clientX-rc.left-G.m.l)/G.m.pw*0+(ev.clientX-rc.left-G.m.l)/G.pw*S.P.n);
+  if(t<0||t>S.P.n){tip.style.display='none';draw();return}
+  draw(t);var v=S.lines.map(function(a){return a[t]}).sort(function(a,b){return a-b}),q=function(p){return v[Math.round(p*(v.length-1))]};
+  tip.innerHTML='<b>Trade '+t+'</b><br>media '+fmt(S.mean[t])+' €<br>5° perc. '+fmt(q(.05))+' €<br>95° perc. '+fmt(q(.95))+' €';tip.style.display='block';
+  var tx=G.X(t)+12;if(tx+tip.offsetWidth>G.W-4)tx=G.X(t)-tip.offsetWidth-12;tip.style.left=tx+'px';tip.style.top='14px'}
+cv.addEventListener('pointermove',hv);cv.addEventListener('pointerleave',function(){tip.style.display='none';draw()});
+function later(){cancelAnimationFrame(raf);raf=requestAnimationFrame(sim)}
+['eq','wp','rr','nt','nl','rk'].forEach(function(i){$(i).addEventListener('input',later)});
+$('ru').addEventListener('change',function(){var r=$('rk');if($('ru').value==='%'){r.min=.05;r.max=5;r.step=.05;r.value=.25}else{r.min=10;r.max=2000;r.step=10;r.value=250}later()});
+$('sc').addEventListener('change',function(){draw()});
+$('rs').addEventListener('click',function(){var d={eq:100000,wp:44,rr:4,nt:600,nl:100};for(var k in d)$(k).value=d[k];var r=$('rk');$('ru').value='%';r.min=.05;r.max=5;r.step=.05;r.value=.25;$('sc').value='normal';document.querySelectorAll('.hint').forEach(function(h){h.remove()});labels();S=null;tip.style.display='none';ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);$('hero').innerHTML='<div class="k"><small>Nessun risultato</small><span>Imposta i valori e premi “Nuova simulazione”.</span></div>';$('stats').innerHTML=''});
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button.i');if(!b)return;var box=b.closest('.ctl,.k,.stats div');var h=box.querySelector('.hint');if(h){h.remove();b.setAttribute('aria-expanded','false');return}h=document.createElement('p');h.className='hint';h.textContent=b.dataset.t;box.appendChild(h);b.setAttribute('aria-expanded','true')});$('go').addEventListener('click',sim);
+$('th').addEventListener('click',function(){var d=document.documentElement,dark=css('--glow')==='1';d.setAttribute('data-theme',dark?'light':'dark');draw()});
+window.addEventListener('resize',function(){draw()});
+sim();
+})();
+</script>
+</body>
+</html>
