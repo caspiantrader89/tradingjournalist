@@ -18,5 +18,5 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Persistenza login: resta collegato anche chiudendo il browser
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.warn);
+// La persistenza del login la sceglie auth.js ("Ricordami"). Non impostarla qui:
+// sovrascriverebbe la scelta a ogni caricamento di pagina.

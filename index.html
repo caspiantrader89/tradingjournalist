@@ -510,6 +510,23 @@ tbody tr:hover .row-actions{opacity:1;}
 
 /* ---------------- PRINT / PDF EXPORT ---------------- */
 #print-area{ display:none; }
+/* ---------- Pulsante Multiverso ---------- */
+.nav-item.nav-multiverso{
+  margin:6px 0 2px; text-decoration:none; color:#fff; font-weight:600;
+  border:1px solid transparent;
+  background:linear-gradient(#141922,#141922) padding-box,
+             linear-gradient(90deg,#2ee6ff,#a35bff,#ff4fa3,#2ee6ff) border-box;
+  background-size:100% 100%,300% 100%;
+  animation:mv-glow 6s linear infinite;
+  transition:box-shadow .2s, transform .2s;
+}
+.nav-item.nav-multiverso:hover{color:#fff; transform:translateY(-1px); box-shadow:0 4px 18px rgba(163,91,255,.35);}
+.nav-multiverso svg{color:#b99bff; transition:transform .5s;}
+.nav-multiverso:hover svg{transform:rotate(180deg);}
+.nav-multiverso .mv-arrow{margin-left:auto; color:#ff4fa3;}
+@keyframes mv-glow{to{background-position:0 0,300% 0;}}
+@media (prefers-reduced-motion:reduce){.nav-item.nav-multiverso{animation:none;} .nav-multiverso svg{transition:none;}}
+
 @media print{
   body > *:not(#print-area){ display:none !important; }
   #print-area{
@@ -715,6 +732,11 @@ img, canvas, svg{max-width:100%;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="2.5" width="16" height="19" rx="2"/><path d="M8 7h8M8 11h1M12 11h1M16 11h1M8 15h1M12 15h1M16 15h1M8 19h1M12 19h1"/></svg>
       Calcolatore
     </button>
+    <a class="nav-item nav-multiverso" href="multiverso-diario.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(30 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-30 12 12)"/></svg>
+      Multiverso
+      <span class="mv-arrow" aria-hidden="true">→</span>
+    </a>
     <div class="nav-section-label">Gestione</div>
     <button class="nav-item" data-view="conto">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M6 15h4"/></svg>
