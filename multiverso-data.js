@@ -121,7 +121,7 @@
     return { wrapper: raw, failed: failed };
   }
 
-  async function loadUser(user) {
+  async function loadUser(user, keepId) {
     var token = ++loadToken;
     show('user');
     $('tj-controls').hidden = true;
@@ -139,14 +139,15 @@
     var sel = $('tj-account');
     sel.textContent = '';
     ids.forEach(function (id) { sel.add(new Option(accounts[id].name || 'Conto', id)); });
-    sel.value = accounts[res.wrapper.currentAccountId] ? res.wrapper.currentAccountId : ids[0];
+    var wanted = accounts[keepId] ? keepId : res.wrapper.currentAccountId;
+    sel.value = accounts[wanted] ? wanted : ids[0];
     $('tj-controls').hidden = false;
     applyAccount();
   }
 
   $('tj-account').addEventListener('change', applyAccount);
   $('tj-reload').addEventListener('click', function () {
-    if (auth.currentUser) loadUser(auth.currentUser);
+    if (auth.currentUser) loadUser(auth.currentUser, $('tj-account').value);
   });
 
   var hadUser = false;
